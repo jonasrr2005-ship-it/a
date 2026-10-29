@@ -114,7 +114,7 @@ game.persist = () => {
   save.time = world.time;
   try { localStorage.setItem('palmera_save', JSON.stringify(save)); } catch { /* voll */ }
 };
-const vibrate = (ms) => { try { if (window.Android) window.Android.vibrate(ms); else navigator.vibrate?.(ms); } catch { /* egal */ } };
+const vibrate = (ms) => { if (pad.active) pad.rumble = Math.max(pad.rumble, ms); try { if (window.Android) window.Android.vibrate(ms); else navigator.vibrate?.(ms); } catch { /* egal */ } };
 if (save.time) world.time = save.time;
 
 // ---------- Fahndung ----------
@@ -296,12 +296,12 @@ function playerCombat(dt) {
   player.fireCool -= dt;
   const w = WEAPONS[player.weapon];
   player.gun.visible = !w.melee;
-  const firing = input.held.fire && !player.dead;
+  const firing = held('fire') && !player.dead;
   const car = player.vehicle;
   const origin = car ? new THREE.Vector3(car.pos.x, 1.4, car.pos.z) : new THREE.Vector3(player.pos.x, player.pos.y + 1.4, player.pos.z);
   const yaw = car ? car.heading : camYaw;
   target = w.melee ? null : findTarget(origin, yaw, w.range * 0.75, car ? 0.7 : 0.55);
-  player.aiming = firing && !w.melee;
+  player.aiming = (firing || held('aim')) && !w.melee;
   if (!firing || player.fireCool > 0) return;
   if (w.melee) {
     if (car) return;
@@ -667,6 +667,99 @@ window.addEventListener('keyup', (e) => { keys[e.code] = false; if (keyMap[e.cod
 canvas.addEventListener('mousedown', (e) => { if (e.button === 0) input.held.fire = true; });
 window.addEventListener('mouseup', () => { input.held.fire = false; });
 
+// ---------- PS4-Controller (Gamepad-API, Standard-Belegung) ----------
+// 0 Kreuz · 1 Kreis · 2 Quadrat · 3 Dreieck · 4 L1 · 5 R1 · 6 L2 · 7 R2 · 8 Share · 9 Options · 10 L3 · 11 R3 · 12-15 Steuerkreuz · 17 Touchpad
+const pad = { active: false, prev: [], held: {}, mx: 0, my: 0, gas: 0, brake: 0, focus: 0, navCool: 0, rumble: 0 };
+function held(k) { return input.held[k] || pad.held[k]; }
+const deadzone = (v, d = 0.15) => (Math.abs(v) < d ? 0 : (v - Math.sign(v) * d) / (1 - d));
+window.addEventListener('gamepadconnected', () => { if (game.started) game.toast('🎮 Controller verbunden'); });
+window.addEventListener('gamepaddisconnected', () => { setPadMode(false); if (game.started) game.toast('Controller getrennt'); });
+window.addEventListener('pointerdown', () => setPadMode(false), true);
+function setPadMode(on) {
+  if (pad.active === on) return;
+  pad.active = on;
+  $('controls').classList.toggle('padmode', on);
+  if (!on) {
+    pad.held = {}; pad.mx = pad.my = pad.gas = pad.brake = 0;
+    document.querySelector('.padfocus')?.classList.remove('padfocus');
+  }
+}
+// Gerade sichtbares Menü, das mit dem Controller bedient wird
+function padMenu() {
+  for (const id of ['title', 'help', 'shop', 'menu', 'mapview']) if (!$(id).classList.contains('hidden')) return $(id);
+  return null;
+}
+function padBack() {
+  if (!$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); openMenu(); }
+  else if (game.started) closeMenu();
+}
+function pollPad() {
+  const list = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for (const g of list) if (g && g.connected && g.buttons.length) { gp = g; break; }
+  if (!gp) return;
+  const down = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const val = (i) => (gp.buttons[i] ? gp.buttons[i].value : 0);
+  const edge = (i) => down(i) && !pad.prev[i];
+  const ax = (i) => deadzone(gp.axes[i] || 0);
+  const done = () => { pad.prev = gp.buttons.map((b) => b.pressed); };
+  if (gp.buttons.some((b) => b.pressed) || gp.axes.some((a) => Math.abs(a) > 0.4)) setPadMode(true);
+  if (!pad.active) { done(); return; }
+
+  const menu = padMenu();
+  if (menu) {
+    pad.held = {}; pad.mx = pad.my = pad.gas = pad.brake = 0;
+    if (menu.id === 'title') { if (edge(0) || edge(9)) $('play').click(); }
+    else if (menu.id === 'mapview') { if (edge(0) || edge(1) || edge(9) || edge(17)) closeMenu(); }
+    else {
+      const btns = [...menu.querySelectorAll('button')].filter((b) => b.offsetParent !== null);
+      const ly = gp.axes[1] || 0;
+      let mv = 0;
+      if (edge(12)) mv = -1;
+      if (edge(13)) mv = 1;
+      pad.navCool -= 1 / 60;
+      if (!mv && Math.abs(ly) > 0.6 && pad.navCool <= 0) { mv = Math.sign(ly); pad.navCool = 0.25; }
+      if (Math.abs(ly) < 0.3) pad.navCool = 0;
+      pad.focus = clamp(pad.focus + mv, 0, Math.max(0, btns.length - 1));
+      btns.forEach((b, i) => b.classList.toggle('padfocus', i === pad.focus));
+      if (edge(0) && btns[pad.focus]) { const b = btns[pad.focus]; pad.focus = 0; b.click(); }
+      else if (edge(1) || edge(9)) { pad.focus = 0; padBack(); }
+    }
+    done();
+    return;
+  }
+  pad.focus = 0;
+  if (!game.started || game.paused) { done(); return; }
+
+  pad.mx = ax(0); pad.my = ax(1);
+  input.lookX += ax(2) * 7;
+  input.lookY += ax(3) * 4;
+  pad.held = {};
+  if (player.vehicle) {
+    pad.gas = val(7); pad.brake = val(6);
+    pad.held.hand = down(5) || down(0);
+    pad.held.fire = down(2);
+    if (edge(4) || edge(10)) input.pressed.horn = true;
+    if (edge(13)) { game.audio.radioOn = !game.audio.radioOn; game.toast(game.audio.radioOn ? '📻 Neon FM' : 'Radio aus'); }
+  } else {
+    pad.gas = pad.brake = 0;
+    pad.held.fire = val(7) > 0.3 || down(5);
+    pad.held.aim = val(6) > 0.3;
+    pad.held.sprint = down(2) || down(10);
+    if (edge(0)) input.pressed.jump = true;
+    if (edge(4) || edge(15)) cycleWeapon();
+  }
+  if (edge(3)) input.pressed.enter = true;
+  if (edge(12)) camFar = !camFar;
+  if (edge(9)) openMenu();
+  if (edge(8) || edge(17)) openMap();
+  if (pad.rumble > 0 && gp.vibrationActuator) {
+    gp.vibrationActuator.playEffect('dual-rumble', { duration: Math.min(400, pad.rumble), strongMagnitude: 0.8, weakMagnitude: 0.5 }).catch(() => {});
+  }
+  pad.rumble = 0;
+  done();
+}
+
 // ---------- Kamera ----------
 let camYaw = player.heading, camPitch = 0.28, camDist = 4.6, camYawFollow = 0, shake = 0;
 const camPos = new THREE.Vector3();
@@ -730,16 +823,17 @@ function updatePlayer(dt) {
   if (game.state === 'busted') { player.move(dt, 0, 0, 0); player.animate(dt); if (player.vehicle) player.vehicle.drive(dt, 0, 0, true); return; }
   const kmx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   const kmy = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
-  const mx = clamp(input.mx + kmx, -1, 1), my = clamp(input.my + kmy, -1, 1);
+  const mx = clamp(input.mx + kmx + pad.mx, -1, 1), my = clamp(input.my + kmy + pad.my, -1, 1);
   if (input.pressed.enter) tryEnter();
   const car = player.vehicle;
   if (car) {
     let thr = 0;
-    if (input.held.gas || (keys.KeyW || keys.ArrowUp)) thr = 1;
+    if (pad.gas > 0.05 || pad.brake > 0.05) thr = pad.gas - pad.brake; // analoge Trigger R2/L2
+    else if (input.held.gas || (keys.KeyW || keys.ArrowUp)) thr = 1;
     else if (input.held.brake || (keys.KeyS || keys.ArrowDown)) thr = -1;
     else if (input.my < -0.35) thr = clamp(-input.my * 1.3, 0, 1);
     else if (input.my > 0.5) thr = -1;
-    const hand = input.held.hand || keys.Space;
+    const hand = held('hand') || keys.Space;
     car.throttle = Math.max(0, thr);
     const before = car.speed;
     car.drive(dt, thr, mx, hand);
@@ -751,7 +845,7 @@ function updatePlayer(dt) {
     const fx = Math.sin(camYaw), fz = Math.cos(camYaw);
     const dx = fx * -my + -fz * mx, dz = fz * -my + fx * mx;
     const mag = Math.min(1, Math.hypot(mx, my));
-    const sprint = sprintToggle || input.held.sprint || mag > 0.95;
+    const sprint = sprintToggle || held('sprint') || (mag > 0.95 && !pad.active);
     const speed = mag < 0.08 ? 0 : sprint ? 7.2 : 1.8 + 2.4 * mag;
     player.move(dt, dx, dz, speed, input.pressed.jump);
     if (player.aiming) {
@@ -1192,6 +1286,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   let dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  pollPad();
   if (!game.started) return;
   if (game.paused) { input.pressed = {}; return; }
 

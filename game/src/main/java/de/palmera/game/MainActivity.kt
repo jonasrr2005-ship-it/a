@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -49,6 +51,8 @@ class MainActivity : Activity() {
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
             overScrollMode = WebView.OVER_SCROLL_NEVER
+            isFocusable = true
+            isFocusableInTouchMode = true
             addJavascriptInterface(NativeBridge(), "Android")
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
@@ -58,6 +62,7 @@ class MainActivity : Activity() {
             }
         }
         setContentView(webView)
+        webView.requestFocus()
         hideSystemBars()
         webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
     }
@@ -89,6 +94,18 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         webView.destroy()
         super.onDestroy()
+    }
+
+    // Controller-Tasten (z. B. PS4-Kreis, das Android sonst als „Zurück“ deutet) direkt an die
+    // WebView geben, damit sie über die Gamepad-API im Spiel ankommen und die App nicht schließen
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val fromPad = event.isFromSource(InputDevice.SOURCE_GAMEPAD) ||
+            event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        if (fromPad && ::webView.isInitialized) {
+            webView.dispatchKeyEvent(event)
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     @Deprecated("Deprecated in Java")
