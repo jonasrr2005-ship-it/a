@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Standort-Tracker</string>
+    <string name="start">Aufzeichnung starten</string>
+    <string name="stop">Aufzeichnung stoppen</string>
+    <string name="clear">Löschen</string>
+    <string name="center">Zentrieren</string>
+    <string name="notification_channel">Standortaufzeichnung</string>
+    <string name="notification_title">Standort wird aufgezeichnet</string>
+    <string name="notification_text">%1$d Punkte · %2$s</string>
+    <string name="stats">%1$d Punkte · %2$s</string>
+    <string name="permission_denied">Ohne Standortberechtigung kann nicht aufgezeichnet werden.</string>
+    <string name="gps_disabled">Bitte GPS/Standort in den Einstellungen aktivieren.</string>
+</resources>
