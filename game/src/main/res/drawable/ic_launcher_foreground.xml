@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sonne -->
+    <path
+        android:fillColor="#FFD54F"
+        android:pathData="M54,30a16,16 0,1 1,-0.01 0z" />
+    <!-- Skyline -->
+    <path
+        android:fillColor="#1A1033"
+        android:pathData="M30,78V58h7v-8h6v28h4V44h8v34h3V52h7v-6h6v32z" />
+    <!-- Palme -->
+    <path
+        android:fillColor="#1A1033"
+        android:pathData="M72,78l2,-20c-4,-1 -8,1 -10,4c2,-5 7,-7 11,-6c-2,-4 -7,-5 -10,-4c4,-3 9,-1 11,2c1,-4 5,-6 9,-5c-3,1 -6,4 -6,7c3,-2 8,-1 10,2c-4,-1 -7,0 -9,2l-3,18z" />
+</vector>

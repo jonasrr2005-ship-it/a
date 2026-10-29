@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "StandortTracker"
 include(":app")
+include(":game")

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Palmera City</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="radar"><canvas id="minimap" width="360" height="360"></canvas>
+    <div id="bars"><div id="hp"><i></i></div><div id="ar"><i></i></div></div>
+  </div>
+  <div id="topright">
+    <div id="clock">09:00</div>
+    <div id="weapon"><span id="wicon">👊</span><span id="ammo"></span></div>
+    <div id="money">$0</div>
+    <div id="stars"><b>★</b><b>★</b><b>★</b><b>★</b><b>★</b></div>
+  </div>
+  <div id="mission"><div id="mtitle"></div><div id="mobj"></div></div>
+  <div id="toast"></div>
+  <div id="big"><div id="bigt"></div><div id="bigs"></div></div>
+  <div id="speedo"></div>
+  <div id="carname"></div>
+  <div id="reticle"></div>
+  <div id="cross"></div>
+  <button id="btn-pause" class="tb">❚❚</button>
+  <button id="btn-radio" class="tb hidden">📻</button>
+  <button id="btn-cam" class="tb">🎥</button>
+</div>
+
+<div id="controls" class="hidden">
+  <div id="stickzone"><div id="stick"><div id="knob"></div></div></div>
+  <div id="lookzone"></div>
+  <div id="foot">
+    <button class="b big" data-b="fire">🔫</button>
+    <button class="b" data-b="jump" style="right:118px;bottom:24px">⤒</button>
+    <button class="b" data-b="enter" style="right:120px;bottom:110px">🚗</button>
+    <button class="b sm" data-b="sprint" style="right:24px;bottom:122px">🏃</button>
+  </div>
+  <div id="drive" class="hidden">
+    <button class="b big" data-b="gas">▲</button>
+    <button class="b" data-b="brake" style="right:120px;bottom:20px">▼</button>
+    <button class="b sm" data-b="hand" style="right:196px;bottom:22px">HB</button>
+    <button class="b" data-b="fire" style="right:30px;bottom:120px">🔫</button>
+    <button class="b sm" data-b="enter" style="right:110px;bottom:118px">⇱</button>
+    <button class="b sm" data-b="horn" style="right:176px;bottom:96px">📯</button>
+  </div>
+</div>
+
+<div id="title">
+  <div class="logo"><span>PALMERA</span><em>CITY</em></div>
+  <div class="sub">Open-World · Sonne, Neon &amp; Ärger</div>
+  <button id="play">SPIELEN</button>
+  <div class="hint">Linker Daumen: Bewegen/Lenken · Rechte Seite wischen: Kamera</div>
+</div>
+
+<div id="menu" class="hidden">
+  <div class="panel">
+    <h2>Pause</h2>
+    <button data-m="resume">Weiterspielen</button>
+    <button data-m="map">Karte</button>
+    <button data-m="quality">Grafik: <span id="qv"></span></button>
+    <button data-m="sound">Ton: <span id="sv"></span></button>
+    <button data-m="help">Steuerung</button>
+    <button data-m="reset">Spielstand löschen</button>
+    <div id="stats"></div>
+  </div>
+</div>
+
+<div id="help" class="hidden">
+  <div class="panel">
+    <h2>Steuerung</h2>
+    <p><b>Zu Fuß:</b> Joystick links bewegen (ganz rausziehen = rennen) · rechts wischen = Kamera · 🔫 schießen (zielt automatisch) · ⤒ springen · 🚗 Fahrzeug klauen/einsteigen · Waffe oben rechts antippen = wechseln</p>
+    <p><b>Im Auto:</b> Joystick lenken · ▲ Gas · ▼ Bremse/Rückwärts · HB Handbremse (Driften) · 🔫 aus dem Fenster schießen · ⇱ aussteigen · 📻 Radio</p>
+    <p><b>Fahndung:</b> Bei Straftaten kommt die Polizei. Entkomme ihrem Blick, bis die Sterne verschwinden – oder fahr in die Lackiererei (L).</p>
+    <p><b>Karte:</b> Radar antippen. Auf der Karte tippen setzt einen Wegpunkt. Gelbe Buchstaben = Missionen, W = Waffenladen, L = Lackiererei, + = Krankenhaus.</p>
+    <p><b>Extra:</b> 20 Muscheln sind in der Stadt versteckt.</p>
+    <button data-m="back">Zurück</button>
+  </div>
+</div>
+
+<div id="mapview" class="hidden"><canvas id="bigmap"></canvas><div class="maphint">Tippen = Wegpunkt · Doppeltipp außerhalb = schließen</div><button id="mapclose" class="tb">✕</button></div>
+
+<div id="shop" class="hidden">
+  <div class="panel">
+    <h2>Waffenladen</h2>
+    <div id="shopitems"></div>
+    <button data-m="closeshop">Verlassen</button>
+  </div>
+</div>
+
+<div id="loading">Lade Stadt…</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
