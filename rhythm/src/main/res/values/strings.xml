@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Beat Tiles</string>
+    <string name="subtitle">Tippe im Takt deiner eigenen Musik</string>
+    <string name="pick_song">Song auswählen</string>
+    <string name="pick_hint">Jede Audiodatei auf deinem Handy funktioniert (MP3, M4A, OGG, FLAC, WAV …). Du kannst Songs auch aus dem Dateimanager per „Teilen“ an Beat Tiles schicken.</string>
+    <string name="easy">Leicht</string>
+    <string name="normal">Normal</string>
+    <string name="hard">Schwer</string>
+    <string name="recent">Zuletzt gespielt</string>
+    <string name="empty_hint">Noch keine Songs. Wähle oben einen Song aus – die Kacheln werden automatisch aus dem Rhythmus erzeugt.</string>
+    <string name="analyzing">Analysiere Rhythmus von „%1$s“ …</string>
+    <string name="best_score">Rekord: %1$d</string>
+    <string name="not_played">Auf diesem Level noch nicht gespielt</string>
+    <string name="song_unavailable">Datei nicht mehr verfügbar – bitte erneut auswählen.</string>
+    <string name="too_few_beats">In diesem Song wurden zu wenige Beats gefunden.</string>
+    <string name="error_analyze">Song konnte nicht analysiert werden: %1$s</string>
+    <string name="error_play">Song kann nicht abgespielt werden: %1$s</string>
+    <string name="paused">Pause</string>
+    <string name="resume">Weiter</string>
+    <string name="quit">Beenden</string>
+    <string name="restart">Neustart</string>
+    <string name="result_title">%1$s · %2$s</string>
+    <string name="new_record">Neuer Rekord!</string>
+    <string name="result_details">Genauigkeit: %1$.1f %%\nBeste Combo: %2$d\n\nPerfekt: %3$d   Super: %4$d\nOK: %5$d   Verpasst: %6$d\n\nRekord: %7$d</string>
+    <string name="again">Nochmal</string>
+    <string name="to_menu">Andere Songs</string>
+</resources>

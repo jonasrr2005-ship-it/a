@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.BeatTiles" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="colorSecondary">@color/accent2</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.BeatTiles.Game">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
