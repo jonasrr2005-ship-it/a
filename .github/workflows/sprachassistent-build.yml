@@ -23,12 +23,14 @@ jobs:
       - name: APK bauen
         run: ./gradlew assembleDebug
       - name: Pruefen auf Android-4.0-Kompatibilitaet (Lint)
-        run: ./gradlew lintDebug
+        run: |
+          ./gradlew lintDebug
+          cat app/build/reports/lint-results-debug.txt || true
       - name: APK-Inhalt anzeigen
         run: |
           ls -la app/build/outputs/apk/debug/
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -E "\.so|classes|assets/ps|roots"
-          $ANDROID_HOME/build-tools/*/aapt dump badging app/build/outputs/apk/debug/app-debug.apk | grep -E "sdkVersion|native-code|package" || true
+          $(ls -d $ANDROID_HOME/build-tools/* | tail -1)/aapt dump badging app/build/outputs/apk/debug/app-debug.apk | grep -E "sdkVersion|native-code|package" || true
       - uses: actions/upload-artifact@v4
         with:
           name: sprachassistent-apk

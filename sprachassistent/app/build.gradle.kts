@@ -37,7 +37,6 @@ android {
         // prueft, ob versehentlich Funktionen neuer als Android 4.0.4 benutzt werden
         checkOnly += listOf("NewApi", "InlinedApi")
         textReport = true
-        textOutput = file("stdout")
     }
     packaging {
         jniLibs {
