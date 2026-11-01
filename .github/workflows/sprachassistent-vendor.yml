@@ -1,0 +1,61 @@
+name: Sprachassistent - PocketSphinx holen
+
+# Holt einmalig die PocketSphinx-Bibliothek (AAR) und das kleine englische
+# Akustikmodell aus dem offiziellen CMU-Sphinx-Demo-Projekt und legt sie ins
+# Repository, damit Android Studio offline bauen kann.
+on:
+  push:
+    paths:
+      - .github/workflows/sprachassistent-vendor.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Demo-Projekt klonen
+        run: git clone --filter=blob:none --no-checkout https://github.com/cmusphinx/pocketsphinx-android-demo /tmp/demo
+      - name: Uebersicht
+        working-directory: /tmp/demo
+        run: |
+          git log --all --format='%h %ad %s' | head -40
+          echo "--- Dateien (alle Commits) ---"
+          git log --all --format= --name-only | sort -u | grep -iE 'aar|ptm|\.dict|mdef|\.so$|gradle' | head -200
+      - name: Dateien uebernehmen
+        working-directory: /tmp/demo
+        run: |
+          set -e
+          DEST=$GITHUB_WORKSPACE/sprachassistent/app
+          mkdir -p $DEST/libs $DEST/src/main/assets/ps/en-us-ptm
+          first_existing() { # $1 = Pfad -> neuester Commit, in dem die Datei existiert
+            for c in $(git rev-list --all -- "$1"); do
+              if git cat-file -e "$c:$1" 2>/dev/null; then echo $c; return; fi
+            done
+          }
+          AAR=$(git log --all --format= --name-only | sort -u | grep -i '\.aar$' | grep -i pocketsphinx | head -1)
+          echo "AAR=$AAR"
+          C=$(first_existing "$AAR"); echo "commit=$C"
+          git show "$C:$AAR" > $DEST/libs/pocketsphinx-android.aar
+          MDEF=$(git log --all --format= --name-only | sort -u | grep -E 'en-us-ptm/mdef$' | head -1)
+          DIR=$(dirname "$MDEF"); echo "DIR=$DIR"
+          C=$(first_existing "$MDEF"); echo "commit=$C"
+          for f in $(git ls-tree --name-only "$C:$DIR"); do
+            case "$f" in *.md5) continue;; esac
+            git show "$C:$DIR/$f" > $DEST/src/main/assets/ps/en-us-ptm/$f
+          done
+          DICT=$(git log --all --format= --name-only | sort -u | grep -E 'cmudict-en-us\.dict$' | head -1)
+          C=$(first_existing "$DICT"); echo "DICT=$DICT commit=$C"
+          git show "$C:$DICT" > $DEST/src/main/assets/ps/cmudict-en-us.dict
+          ls -la $DEST/libs $DEST/src/main/assets/ps $DEST/src/main/assets/ps/en-us-ptm
+          unzip -l $DEST/libs/pocketsphinx-android.aar
+      - name: Ins Repository schreiben
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add sprachassistent
+          git commit -m "Sprachassistent: PocketSphinx-Bibliothek und Sprachmodell hinzufuegen" || echo "nichts zu tun"
+          git push
