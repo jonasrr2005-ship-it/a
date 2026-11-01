@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="effort_names">
+        <item>Niedrig (schnellste Antwort, empfohlen)</item>
+        <item>Mittel</item>
+        <item>Hoch (gruendlicher, langsamer)</item>
+        <item>Nicht senden (fuer aeltere Modelle)</item>
+    </string-array>
+    <string-array name="effort_values">
+        <item>low</item>
+        <item>medium</item>
+        <item>high</item>
+        <item>none</item>
+    </string-array>
+
+    <string-array name="threshold_names">
+        <item>Sehr unempfindlich (1e-5)</item>
+        <item>Unempfindlich (1e-10)</item>
+        <item>Etwas unempfindlich (1e-15)</item>
+        <item>Normal (1e-20)</item>
+        <item>Etwas empfindlich (1e-25)</item>
+        <item>Empfindlich (1e-30)</item>
+        <item>Sehr empfindlich (1e-40)</item>
+    </string-array>
+    <string-array name="threshold_values">
+        <item>1e-5</item>
+        <item>1e-10</item>
+        <item>1e-15</item>
+        <item>1e-20</item>
+        <item>1e-25</item>
+        <item>1e-30</item>
+        <item>1e-40</item>
+    </string-array>
+
+    <string-array name="stt_names">
+        <item>Google (im Handy eingebaut, kostenlos)</item>
+        <item>OpenAI Whisper (eigener Schluessel noetig)</item>
+    </string-array>
+    <string-array name="stt_values">
+        <item>google</item>
+        <item>whisper</item>
+    </string-array>
+</resources>

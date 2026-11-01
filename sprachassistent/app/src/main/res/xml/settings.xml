@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory android:title="Claude">
+        <EditTextPreference
+            android:inputType="textPassword"
+            android:key="claude_key"
+            android:title="Claude-API-Schluessel" />
+        <EditTextPreference
+            android:defaultValue=""
+            android:inputType="text"
+            android:key="claude_model"
+            android:title="Modell (leer = claude-opus-5-5)" />
+        <ListPreference
+            android:defaultValue="low"
+            android:entries="@array/effort_names"
+            android:entryValues="@array/effort_values"
+            android:key="claude_effort"
+            android:title="Denkaufwand" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Aktivierungswort">
+        <EditTextPreference
+            android:defaultValue="computer"
+            android:inputType="text"
+            android:key="wake_word"
+            android:title="Aktivierungswort" />
+        <ListPreference
+            android:defaultValue="1e-20"
+            android:entries="@array/threshold_names"
+            android:entryValues="@array/threshold_values"
+            android:key="wake_threshold"
+            android:title="Empfindlichkeit" />
+        <EditTextPreference
+            android:defaultValue=""
+            android:inputType="textCapCharacters"
+            android:key="wake_pron"
+            android:title="Aussprache von Hand (Experten)" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Spracherkennung der Frage">
+        <ListPreference
+            android:defaultValue="google"
+            android:entries="@array/stt_names"
+            android:entryValues="@array/stt_values"
+            android:key="stt_mode"
+            android:title="Dienst" />
+        <EditTextPreference
+            android:inputType="textPassword"
+            android:key="openai_key"
+            android:title="OpenAI-Schluessel (nur fuer Whisper)" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Ton">
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="use_bluetooth"
+            android:summary="Mikrofon des Bluetooth-Lautsprechers nutzen und automatisch neu verbinden"
+            android:title="Bluetooth-Mikrofon" />
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="answer_a2dp"
+            android:summary="Antwort in Musikqualitaet statt Telefonqualitaet (Umschalten dauert ca. 2 s)"
+            android:title="Antwort in Musikqualitaet" />
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="beep"
+            android:summary="Kurzer Ton, wenn das Aktivierungswort erkannt wurde"
+            android:title="Piepton" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Dauerbetrieb">
+        <CheckBoxPreference
+            android:defaultValue="true"
+            android:key="autostart"
+            android:summary="Startet beim Einschalten des Handys, wenn der Dienst vorher lief"
+            android:title="Autostart" />
+    </PreferenceCategory>
+</PreferenceScreen>
