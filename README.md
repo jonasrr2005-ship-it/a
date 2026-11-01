@@ -1,3 +1,6 @@
+> **Neu: Sprachassistent mit Claude** für Android 4.0.4, im Ordner [`sprachassistent/`](sprachassistent/).
+> Die Schritt-für-Schritt-Anleitung steht in [`sprachassistent/ANLEITUNG.md`](sprachassistent/ANLEITUNG.md).
+
 # Standort-Tracker (Android)
 
 Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
