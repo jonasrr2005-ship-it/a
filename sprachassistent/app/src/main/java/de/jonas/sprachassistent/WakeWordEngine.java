@@ -48,8 +48,16 @@ public final class WakeWordEngine {
     private volatile Thread thread;
     private Callback callback;
 
-    static {
-        System.loadLibrary("pocketsphinx_jni");
+    private static boolean libLoaded;
+
+    private static synchronized void loadLib() throws Exception {
+        if (libLoaded) return;
+        try {
+            System.loadLibrary("pocketsphinx_jni");
+            libLoaded = true;
+        } catch (Throwable t) {
+            throw new Exception("PocketSphinx-Bibliothek konnte nicht geladen werden: " + t, t);
+        }
     }
 
     public WakeWordEngine(Context ctx) {
@@ -60,6 +68,7 @@ public final class WakeWordEngine {
     public synchronized void prepare(String phrase, String override, double threshold) throws Exception {
         String key = phrase + "|" + override + "|" + threshold;
         if (decoder != null && key.equals(configKey)) return;
+        loadLib();
         long t0 = System.currentTimeMillis();
         File dir = new File(ctx.getFilesDir(), "ps");
         File hmm = new File(dir, "en-us-ptm");
@@ -169,7 +178,7 @@ public final class WakeWordEngine {
     }
 
     private void loop() {
-        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO);
+        Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
         AudioRecord rec = openMic();
         if (rec == null) {
             synchronized (this) {
@@ -265,9 +274,8 @@ public final class WakeWordEngine {
         short[] pcm = new short[maxSamples];
         int len = 0;
         short[] buf = new short[CHUNK];
-        // Rauschpegel aus den ersten 300 ms schaetzen
-        long noise = 0;
-        int noiseChunks = 0;
+        // Grundrauschen = leisester Abschnitt am Anfang (robust gegen den Piepton)
+        long minEnergy = Long.MAX_VALUE;
         boolean speechStarted = false;
         int silentChunks = 0;
         int chunks = 0;
@@ -280,13 +288,10 @@ public final class WakeWordEngine {
             long energy = 0;
             for (int i = 0; i < n; i++) energy += Math.abs((int) buf[i]);
             energy /= n;
-            if (chunks <= 3) {
-                noise += energy;
-                noiseChunks++;
-                continue;
-            }
-            long base = Math.max(150, noise / Math.max(1, noiseChunks));
-            boolean loud = energy > base * 2.5;
+            if (chunks <= 10 && energy < minEnergy) minEnergy = energy;
+            if (chunks < 2) continue;
+            long base = Math.max(150, minEnergy);
+            boolean loud = energy > base * 3;
             if (loud) {
                 speechStarted = true;
                 silentChunks = 0;

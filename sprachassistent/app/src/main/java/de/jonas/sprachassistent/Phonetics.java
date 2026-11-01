@@ -127,7 +127,7 @@ public final class Phonetics {
             if (rest.startsWith("aa")) { ph.add("AA"); i += 2; continue; }
             if (rest.startsWith("ee")) { ph.add("EY"); i += 2; continue; }
             if (rest.startsWith("oo")) { ph.add("OW"); i += 2; continue; }
-            if (isVowel(c) && i + 1 < n && w.charAt(i + 1) == 'h') {
+            if (isVowel(c) && i + 1 < n && w.charAt(i + 1) == 'h' && (i + 2 >= n || !isVowel(w.charAt(i + 2)))) {
                 // Dehnungs-h: langer Vokal, h stumm
                 ph.add(longVowel(c)); i += 2; continue;
             }
