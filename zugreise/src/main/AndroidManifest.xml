@@ -25,5 +25,28 @@
             android:name=".AddLegActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Erscheint im „Teilen“-Menü anderer Apps (z. B. DB Navigator, Galerie, Screenshots) -->
+        <activity
+            android:name=".ShareImportActivity"
+            android:exported="true"
+            android:label="Zugreise: Züge übernehmen"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

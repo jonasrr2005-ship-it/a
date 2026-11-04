@@ -48,12 +48,55 @@ class MainActivity : AppCompatActivity() {
         binding.btnAdd.setOnClickListener {
             addLeg.launch(Intent(this, AddLegActivity::class.java).putExtra(AddLegActivity.EXTRA_JOURNEY, journey.id))
         }
+        binding.btnImport.setOnClickListener { showImportMenu() }
         binding.btnFit.setOnClickListener { routeMap.zoomTo(journey.legs) }
         binding.btnJourneys.setOnClickListener { showJourneyMenu() }
         binding.journeyName.setOnClickListener { renameJourney() }
 
         refresh(zoom = true)
         showLastCrash()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        refresh(zoom = true) // z. B. nach einem Import
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        refresh(zoom = false)
+    }
+
+    private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            startActivity(
+                Intent(this, ShareImportActivity::class.java)
+                    .putExtra(ShareImportActivity.EXTRA_IMAGE, uri.toString())
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            )
+        }
+    }
+
+    private fun showImportMenu() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Züge importieren")
+            .setMessage(
+                "Tipp: Im DB Navigator (oder einer anderen App) bei der Verbindung auf „Teilen“ tippen und " +
+                    "„Zugreise“ wählen – das geht mit Text und mit Screenshots."
+            )
+            .setPositiveButton("Screenshot wählen") { _, _ -> pickImage.launch("image/*") }
+            .setNeutralButton("Text einfügen") { _, _ -> importClipboard() }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
+    private fun importClipboard() {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()
+        startActivity(
+            Intent(this, ShareImportActivity::class.java)
+                .putExtra(ShareImportActivity.EXTRA_TEXT, text.orEmpty())
+        )
     }
 
     private fun showLastCrash() {

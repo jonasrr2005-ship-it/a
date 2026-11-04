@@ -73,4 +73,28 @@ class ScreensTest {
             }
         }
     }
+
+    @Test
+    fun sharedTextShowsRecognizedTrains() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val intent = Intent(context, ShareImportActivity::class.java)
+            .setAction(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, "05.11.2026\n10:24 München Hbf\nICE 578\n14:31 Hamburg Hbf\n14:45 Hamburg Hbf\nRE 5\n15:40 Stade")
+        ActivityScenario.launch<ShareImportActivity>(intent).use { scenario ->
+            scenario.onActivity { activity ->
+                val legs = activity.findViewById<android.widget.LinearLayout>(R.id.legs)
+                assertEquals(2, legs.childCount)
+            }
+        }
+    }
+
+    @Test
+    fun importMenuOpens() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.btnImport).performClick()
+            }
+        }
+    }
 }

@@ -34,7 +34,6 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.UUID
 import kotlin.math.roundToInt
 
 class AddLegActivity : AppCompatActivity() {
@@ -66,6 +65,7 @@ class AddLegActivity : AppCompatActivity() {
         store = JourneyStore(this)
         journeyId = intent.getStringExtra(EXTRA_JOURNEY) ?: store.current().id
         prefillFromPreviousLeg()
+        val prefilled = prefillFromIntent()
 
         setupStationInput()
         binding.btnDate.setOnClickListener { pickDate() }
@@ -75,6 +75,18 @@ class AddLegActivity : AppCompatActivity() {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { searchDepartures(); true } else false
         }
         updateDateTimeButtons()
+        if (prefilled) searchDepartures()
+    }
+
+    /** Vorgaben aus einem Import (geteilter Text / Bild). */
+    private fun prefillFromIntent(): Boolean {
+        val name = intent.getStringExtra(EXTRA_STATION) ?: return false
+        station = null
+        setStationText(name)
+        intent.getStringExtra(EXTRA_DATE)?.let { runCatching { date = LocalDate.parse(it) } }
+        intent.getStringExtra(EXTRA_TIME)?.let { runCatching { time = LocalTime.parse(it) } }
+        intent.getStringExtra(EXTRA_TRAIN)?.let { binding.train.setText(it) }
+        return intent.getStringExtra(EXTRA_TIME) != null
     }
 
     /** Für Umstiege: Einstieg = letzter Ausstieg, Zeit = letzte Ankunft. */
@@ -202,7 +214,8 @@ class AddLegActivity : AppCompatActivity() {
             // Nutzer hat keinen Vorschlag angetippt: besten Treffer nehmen
             runSearch {
                 val found = TransitApi.searchStations(typed)
-                val best = found.firstOrNull() ?: run {
+                val best = (if (binding.trainsOnly.isChecked) found.firstOrNull { it.hasTrains == true } else null)
+                    ?: found.firstOrNull() ?: run {
                     showStatus("Kein Bahnhof „$typed“ gefunden.")
                     return@runSearch
                 }
@@ -236,8 +249,14 @@ class AddLegActivity : AppCompatActivity() {
         val query = binding.train.text.toString().trim()
         // 15 Minuten früher anfangen, damit der Zug sicher dabei ist
         val start = LocalDateTime.of(date, time).minusMinutes(15).atZone(ZoneId.systemDefault()).toInstant()
-        showStatus("Suche Abfahrten in ${st.name} …")
-        val all = TransitApi.departures(st.id, start, windowHours = if (query.isNotEmpty()) 4 else null)
+        showStatus("Suche Abfahrten in ${st.label} …")
+        val trainsOnly = binding.trainsOnly.isChecked
+        var all = TransitApi.departures(st.id, start, if (query.isNotEmpty()) 4 else null, trainsOnly)
+        if (all.isEmpty()) {
+            // Nichts in der Nähe der Uhrzeit: einen ganzen Tag durchsuchen
+            showStatus("Keine Abfahrten zur gewählten Zeit – suche im ganzen Tag …")
+            all = TransitApi.departures(st.id, start, 24, trainsOnly)
+        }
         val matching = all.filter { TransitApi.matches(it, query) }
         val shown = when {
             query.isEmpty() -> all
@@ -246,6 +265,9 @@ class AddLegActivity : AppCompatActivity() {
         }
         showStatus(
             when {
+                all.isEmpty() && trainsOnly ->
+                    "An „${st.label}“ fahren in den nächsten 24 Stunden keine Züge. Wähle einen Vorschlag mit 🚆 " +
+                        "oder schalte „Nur Züge“ aus."
                 all.isEmpty() -> "Keine Abfahrten gefunden. Anderer Bahnhof oder andere Uhrzeit?"
                 query.isNotEmpty() && matching.isEmpty() ->
                     "„$query“ nicht gefunden – hier alle Abfahrten. Tippe deinen Zug an:"
@@ -290,10 +312,18 @@ class AddLegActivity : AppCompatActivity() {
         runSearch {
             showStatus("Lade Laufweg von ${dep.name} …")
             val trip = TransitApi.trip(dep.tripId)
-            val board = boardingIndex(trip.stops, dep.stop)
+            val board = LegResolver.boardingIndex(trip.stops, dep.stop)
             if (board >= trip.stops.lastIndex) {
                 showStatus("${dep.name} endet hier – bitte einen anderen Zug wählen.")
                 return@runSearch
+            }
+            // Ausstieg schon bekannt (z. B. aus geteiltem Text)? Dann direkt speichern.
+            val exitName = intent.getStringExtra(EXTRA_EXIT)
+            if (exitName != null) {
+                LegResolver.alightIndex(trip.stops, board, exitName, null)?.let {
+                    saveLeg(trip, dep, board, it)
+                    return@runSearch
+                }
             }
             showStatus("${dep.name} → ${trip.headsign ?: trip.stops.last().name}: Wo steigst du aus?")
             val later = trip.stops.subList(board + 1, trip.stops.size)
@@ -309,32 +339,8 @@ class AddLegActivity : AppCompatActivity() {
         }
     }
 
-    /** Findet den Einstiegshalt im Laufweg (Halt-ID + Abfahrtszeit, ersatzweise Name oder Lage). */
-    private fun boardingIndex(stops: List<Stop>, at: Stop): Int {
-        val idx = stops.indices
-        val sameTime = { s: Stop -> at.scheduledDeparture != null && Times.parse(s.scheduledDeparture) == Times.parse(at.scheduledDeparture) }
-        return idx.firstOrNull { stops[it].stopId == at.stopId && sameTime(stops[it]) }
-            ?: idx.firstOrNull { sameTime(stops[it]) && Geo.distance(stops[it].position, at.position) < 2000 }
-            ?: idx.firstOrNull { stops[it].stopId == at.stopId }
-            ?: idx.firstOrNull { stops[it].name == at.name }
-            ?: idx.minByOrNull { Geo.distance(stops[it].position, at.position) }
-            ?: 0
-    }
-
     private fun saveLeg(trip: Trip, dep: Departure, from: Int, to: Int) {
-        val stops = trip.stops.subList(from, to + 1).toList()
-        val geometry = Geo.cut(trip.geometry, trip.stops.map { it.position }, from, to)
-        val leg = Leg(
-            id = UUID.randomUUID().toString(),
-            tripId = trip.tripId,
-            name = dep.name.ifBlank { trip.name },
-            headsign = dep.headsign ?: trip.headsign,
-            operator = dep.operator ?: trip.operator,
-            mode = dep.mode ?: trip.mode,
-            stops = stops,
-            geometry = geometry,
-        )
-        store.addLeg(journeyId, leg)
+        store.addLeg(journeyId, LegResolver.buildLeg(trip, dep, from, to))
         setResult(RESULT_OK)
         finish()
     }
@@ -360,5 +366,10 @@ class AddLegActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_JOURNEY = "journey"
+        const val EXTRA_STATION = "station"
+        const val EXTRA_DATE = "date"
+        const val EXTRA_TIME = "time"
+        const val EXTRA_TRAIN = "train"
+        const val EXTRA_EXIT = "exit"
     }
 }

@@ -12,8 +12,23 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 /** Ein Bahnhof / eine Haltestelle aus der Suche. */
-data class Station(val id: String, val name: String, val lat: Double, val lon: Double, val area: String?) {
-    override fun toString() = if (area != null && !name.contains(area, ignoreCase = true)) "$name ($area)" else name
+data class Station(
+    val id: String,
+    val name: String,
+    val lat: Double,
+    val lon: Double,
+    val area: String?,
+    /** null = unbekannt, true = hier halten Züge, false = nur Bus/Tram o. Ä. */
+    val hasTrains: Boolean? = null,
+) {
+    val label: String
+        get() = if (area != null && !name.contains(area, ignoreCase = true)) "$name ($area)" else name
+
+    override fun toString() = when (hasTrains) {
+        true -> "🚆 $label"
+        false -> "🚌 $label"
+        null -> label
+    }
 }
 
 /** Eine Abfahrt an einem Bahnhof. */
@@ -69,13 +84,27 @@ object TransitApi {
                     (0 until areas.length()).map { areas.getJSONObject(it) }
                         .firstOrNull { it.optBoolean("default") }?.str("name")
                 }
-                Station(o.getString("id"), o.str("name") ?: "?", o.optDouble("lat"), o.optDouble("lon"), area)
+                val modes = o.optJSONArray("modes")?.let { m -> List(m.length()) { m.optString(it) } }
+                Station(
+                    o.getString("id"), o.str("name") ?: "?", o.optDouble("lat"), o.optDouble("lon"), area,
+                    hasTrains = modes?.let { m -> m.any { it in RAIL_MODES } },
+                )
             }
             .distinctBy { it.toString() }
+            // Bahnhöfe mit Zügen zuerst, die Reihenfolge der API sonst beibehalten
+            .sortedBy { if (it.hasTrains == true) 0 else if (it.hasTrains == null) 1 else 2 }
     }
 
-    /** Abfahrten ab [time]. Mit [windowHours] wird ein größerer Zeitraum durchsucht. */
-    suspend fun departures(stationId: String, time: Instant, windowHours: Int?): List<Departure> =
+    val RAIL_MODES = setOf(
+        "RAIL", "HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "REGIONAL_FAST_RAIL", "REGIONAL_RAIL", "SUBURBAN",
+    )
+
+    /**
+     * Abfahrten ab [time]. Mit [windowHours] wird ein größerer Zeitraum durchsucht.
+     * [trainsOnly] blendet Busse, Trams usw. aus und bezieht nahe Bahnsteige mit ein
+     * (wichtig, wenn z. B. „Bahnhof“ als Bushaltestelle gefunden wurde).
+     */
+    suspend fun departures(stationId: String, time: Instant, windowHours: Int?, trainsOnly: Boolean = false): List<Departure> =
         withContext(Dispatchers.IO) {
             val params = mutableMapOf(
                 "stopId" to stationId,
@@ -84,9 +113,14 @@ object TransitApi {
                 "language" to "de",
             )
             if (windowHours != null) params["window"] = (windowHours * 3600).toString()
+            if (trainsOnly) {
+                params["mode"] = "RAIL"
+                params["radius"] = "400"
+            }
             val body = getVersioned("stoptimes", params)
             val a = JSONObject(body).optJSONArray("stopTimes") ?: JSONArray()
             List(a.length()) { a.getJSONObject(it) }.mapNotNull { o ->
+                if (trainsOnly && o.str("mode")?.let { it !in RAIL_MODES } == true) return@mapNotNull null
                 val tripId = o.str("tripId") ?: return@mapNotNull null
                 val place = o.optJSONObject("place") ?: return@mapNotNull null
                 Departure(
