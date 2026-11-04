@@ -67,4 +67,23 @@ class LiveApiTest {
             "${leg.geometry.size} Punkte, ${(Geo.length(leg.geometry) / 1000).toInt()} km")
         assertTrue(leg.to.name == exit.name)
     }
+
+    @Test
+    fun timetableDateRange() = runBlocking {
+        val st = TransitApi.searchStations("Rahden", trainsOnly = true).first()
+        val today = java.time.LocalDate.now(berlin)
+        val days = listOf(today.plusDays(7), today.plusDays(21), java.time.LocalDate.of(2026, 12, 10),
+            java.time.LocalDate.of(2026, 12, 12), java.time.LocalDate.of(2026, 12, 14),
+            java.time.LocalDate.of(2026, 12, 28), java.time.LocalDate.of(2027, 1, 15))
+        for (d in days) {
+            val start = d.atTime(8, 0).atZone(berlin).toInstant()
+            val deps = TransitApi.departures(st.id, start, null, trainsOnly = true)
+                .filter { Times.parse(it.stop.scheduledDeparture)?.atZone(berlin)?.toLocalDate() == d }
+            println("DATUM $d $st: ${deps.size} Züge an diesem Tag " + deps.take(2).joinToString { "${Times.time(it.stop.scheduledDeparture, it.stop.tz)} ${it.name}" })
+        }
+        // Wie in der App: Zieltag ohne Daten -> gleicher Wochentag in den nächsten Tagen
+        val target = java.time.LocalDate.of(2026, 12, 28)
+        val probe = LegResolver.probeDate(target, today)
+        println("ERSATZTAG für $target: $probe")
+    }
 }

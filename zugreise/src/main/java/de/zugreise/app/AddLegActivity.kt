@@ -245,18 +245,45 @@ class AddLegActivity : AppCompatActivity() {
         }
     }
 
+    /** Tage, um die der gewählte Zug verschoben wird (Fahrplan des Zieltags noch nicht verfügbar). */
+    private var shiftDays = 0L
+
     private suspend fun loadDepartures(st: Station) {
         val query = binding.train.text.toString().trim()
-        // 15 Minuten früher anfangen, damit der Zug sicher dabei ist
-        val start = LocalDateTime.of(date, time).minusMinutes(15).atZone(ZoneId.systemDefault()).toInstant()
-        showStatus("Suche Abfahrten in ${st.label} …")
         val trainsOnly = binding.trainsOnly.isChecked
-        var all = TransitApi.departures(st.id, start, if (query.isNotEmpty()) 4 else null, trainsOnly)
-        if (all.isEmpty()) {
-            // Nichts in der Nähe der Uhrzeit: einen ganzen Tag durchsuchen
-            showStatus("Keine Abfahrten zur gewählten Zeit – suche im ganzen Tag …")
-            all = TransitApi.departures(st.id, start, 24, trainsOnly)
+        val dateText = date.format(DateTimeFormatter.ofPattern("EE, dd.MM.yyyy", Locale.GERMANY))
+        shiftDays = 0
+        showStatus("Suche Abfahrten in ${st.label} am $dateText …")
+
+        suspend fun search(day: LocalDate): List<Departure> {
+            // 15 Minuten früher anfangen, damit der Zug sicher dabei ist
+            val start = LocalDateTime.of(day, time).minusMinutes(15).atZone(ZoneId.systemDefault()).toInstant()
+            val list = TransitApi.departures(st.id, start, if (query.isNotEmpty()) 4 else null, trainsOnly)
+            if (list.isNotEmpty()) return list
+            // Nichts in der Nähe der Uhrzeit: den ganzen Tag ab der Uhrzeit durchsuchen
+            return TransitApi.departures(st.id, start, 24, trainsOnly)
         }
+
+        var all = search(date)
+        var notice: String? = null
+        if (all.isEmpty()) {
+            // Fahrplan für den Tag vielleicht noch nicht veröffentlicht (z. B. nach dem
+            // Fahrplanwechsel Mitte Dezember) -> gleichen Wochentag in den nächsten Tagen nehmen
+            val probe = LegResolver.probeDate(date)
+            if (probe != null) {
+                showStatus("Keine Daten für den $dateText – prüfe den aktuellen Fahrplan …")
+                val probeList = search(probe)
+                if (probeList.isNotEmpty()) {
+                    all = probeList
+                    shiftDays = java.time.temporal.ChronoUnit.DAYS.between(probe, date)
+                    val probeText = probe.format(DateTimeFormatter.ofPattern("EE, dd.MM.", Locale.GERMANY))
+                    notice = "Für den $dateText ist der Fahrplan noch nicht veröffentlicht (neuer Fahrplan ab " +
+                        "Mitte Dezember). Hier die Abfahrten vom $probeText – dein Zug wird mit diesen Zeiten auf " +
+                        "den $dateText übertragen und als „vorläufig“ markiert.\n\n"
+                }
+            }
+        }
+
         val matching = all.filter { TransitApi.matches(it, query) }
         val shown = when {
             query.isEmpty() -> all
@@ -264,11 +291,12 @@ class AddLegActivity : AppCompatActivity() {
             else -> all
         }
         showStatus(
-            when {
+            (notice ?: "") + when {
                 all.isEmpty() && trainsOnly ->
-                    "An „${st.label}“ fahren in den nächsten 24 Stunden keine Züge. Wähle einen Vorschlag mit 🚆 " +
-                        "oder schalte „Nur Züge“ aus."
-                all.isEmpty() -> "Keine Abfahrten gefunden. Anderer Bahnhof oder andere Uhrzeit?"
+                    "Keine Züge an „${st.label}“ am $dateText ab ${time.format(DateTimeFormatter.ofPattern("HH:mm"))} Uhr " +
+                        "gefunden. Wähle einen Vorschlag mit 🚆 oder schalte „Nur Züge“ aus. Liegt der Tag weit in der " +
+                        "Zukunft, ist der Fahrplan evtl. noch nicht veröffentlicht."
+                all.isEmpty() -> "Keine Abfahrten am $dateText gefunden. Anderer Bahnhof oder andere Uhrzeit?"
                 query.isNotEmpty() && matching.isEmpty() ->
                     "„$query“ nicht gefunden – hier alle Abfahrten. Tippe deinen Zug an:"
                 else -> "Tippe deinen Zug an:"
@@ -340,7 +368,7 @@ class AddLegActivity : AppCompatActivity() {
     }
 
     private fun saveLeg(trip: Trip, dep: Departure, from: Int, to: Int) {
-        store.addLeg(journeyId, LegResolver.buildLeg(trip, dep, from, to))
+        store.addLeg(journeyId, LegResolver.shift(LegResolver.buildLeg(trip, dep, from, to), shiftDays))
         setResult(RESULT_OK)
         finish()
     }

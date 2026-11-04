@@ -225,7 +225,7 @@ class ShareImportActivity : AppCompatActivity() {
                         row.state.text = "Übersprungen"
                         continue
                     }
-                    store.addLeg(journeyId, LegResolver.buildLeg(match.trip, match.departure, match.board, alight))
+                    store.addLeg(journeyId, match.toLeg(alight))
                     markDone(row)
                 } catch (e: CancellationException) {
                     throw e

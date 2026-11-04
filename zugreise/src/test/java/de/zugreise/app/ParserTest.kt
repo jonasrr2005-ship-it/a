@@ -158,4 +158,26 @@ class ParserTest {
         assertTrue(db.find("Hamm(Westf)Hbf") != null)
         assertTrue(db.find("Hamburg Hauptbahnhof") != null)
     }
+
+    @Test
+    fun probeDateUsesSameWeekdaySoon() {
+        val today = LocalDate.of(2026, 11, 4) // Mittwoch
+        val target = LocalDate.of(2026, 12, 28) // Montag
+        val probe = LegResolver.probeDate(target, today)!!
+        assertEquals(LocalDate.of(2026, 11, 9), probe)
+        assertEquals(target.dayOfWeek, probe.dayOfWeek)
+        assertEquals(null, LegResolver.probeDate(today.plusDays(1), today))
+    }
+
+    @Test
+    fun shiftMovesAllTimesAndAddsNote() {
+        val s = Stop("A", null, 0.0, 0.0, "Europe/Berlin", null, null, "2026-11-09T09:24:00Z", "2026-11-09T09:24:00Z", null, false)
+        val e = Stop("B", null, 0.0, 1.0, "Europe/Berlin", "2026-11-09T10:00:00Z", "2026-11-09T10:00:00Z", null, null, null, false)
+        val leg = Leg("1", "t", "RB 71", null, null, null, listOf(s, e), emptyList())
+        val moved = LegResolver.shift(leg, 49)
+        // 28.12. ist Winterzeit wie im November -> gleiche UTC-Uhrzeit
+        assertEquals("2026-12-28T09:24:00Z", moved.from.scheduledDeparture)
+        assertEquals("2026-12-28T10:00:00Z", moved.to.scheduledArrival)
+        assertTrue(moved.note!!.contains("noch nicht veröffentlicht"))
+    }
 }

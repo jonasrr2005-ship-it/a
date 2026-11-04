@@ -228,6 +228,14 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             alpha = 0.75f
         })
+        leg.note?.let { note ->
+            col.addView(TextView(this).apply {
+                text = "⚠ vorläufig: $note"
+                textSize = 12f
+                setTextColor(android.graphics.Color.rgb(230, 81, 0))
+                setPadding(0, dp(4), 0, 0)
+            })
+        }
         row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         card.addView(row)
         return card

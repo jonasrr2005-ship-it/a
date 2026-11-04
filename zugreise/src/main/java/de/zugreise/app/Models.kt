@@ -32,6 +32,8 @@ data class Leg(
     val mode: String?,
     val stops: List<Stop>,
     val geometry: List<LatLon>,
+    /** Hinweis, z. B. wenn der Fahrplan für den Tag noch nicht veröffentlicht war. */
+    val note: String? = null,
 ) {
     val from get() = stops.first()
     val to get() = stops.last()
@@ -84,6 +86,7 @@ fun Leg.toJson() = JSONObject().apply {
     put("headsign", headsign)
     put("operator", operator)
     put("mode", mode)
+    put("note", note)
     put("stops", JSONArray().apply { stops.forEach { put(it.toJson()) } })
     // Kompakt: [lat, lon, lat, lon, ...] mit 5 Nachkommastellen (~1 m)
     put("geometry", JSONArray().apply {
@@ -107,6 +110,7 @@ fun legFromJson(o: JSONObject): Leg {
         mode = o.str("mode"),
         stops = stops,
         geometry = geometry,
+        note = o.str("note"),
     )
 }
 

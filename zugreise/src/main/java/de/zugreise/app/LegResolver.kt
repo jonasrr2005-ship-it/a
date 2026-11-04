@@ -14,7 +14,45 @@ object LegResolver {
     class NotResolved(message: String) : IOException(message)
 
     /** Ergebnis: Zuglauf + Einstieg; [alight] ist null, wenn der Ausstieg nicht eindeutig ist. */
-    data class Match(val trip: Trip, val departure: Departure, val board: Int, val alight: Int?)
+    data class Match(
+        val trip: Trip,
+        val departure: Departure,
+        val board: Int,
+        val alight: Int?,
+        /** >0: Zug wurde an einem früheren Tag mit gleichem Wochentag gefunden und wird verschoben. */
+        val shiftDays: Long = 0,
+    ) {
+        fun toLeg(alightIndex: Int): Leg = shift(buildLeg(trip, departure, board, alightIndex), shiftDays)
+    }
+
+    /**
+     * Für Tage, deren Fahrplan noch nicht veröffentlicht ist (z. B. nach dem Fahrplanwechsel
+     * Mitte Dezember): der nächste Tag ab heute mit demselben Wochentag.
+     */
+    fun probeDate(target: LocalDate, today: LocalDate = LocalDate.now()): LocalDate? {
+        if (!target.isAfter(today.plusDays(1))) return null
+        val diff = ((target.dayOfWeek.value - today.dayOfWeek.value) % 7 + 7) % 7
+        return today.plusDays(diff.toLong()).takeIf { it.isBefore(target) }
+    }
+
+    /** Verschiebt alle Zeiten um [days] Tage und vermerkt das am Abschnitt. */
+    fun shift(leg: Leg, days: Long): Leg {
+        if (days == 0L) return leg
+        fun mv(s: String?, tz: String?): String? = Times.parse(s)?.atZone(Times.zone(tz))?.plusDays(days)?.toInstant()?.toString()
+        val stops = leg.stops.map {
+            it.copy(
+                scheduledArrival = mv(it.scheduledArrival, it.tz), arrival = mv(it.scheduledArrival, it.tz),
+                scheduledDeparture = mv(it.scheduledDeparture, it.tz), departure = mv(it.scheduledDeparture, it.tz),
+            )
+        }
+        val original = Times.date(leg.departureTime, leg.from.tz)
+        return leg.copy(
+            stops = stops,
+            note = "Fahrplan für diesen Tag war noch nicht veröffentlicht – Zeiten vom $original übernommen, " +
+                "können sich noch ändern.",
+        )
+    }
+
 
     /** Findet den Einstiegshalt im Laufweg (Halt-ID + Abfahrtszeit, ersatzweise Name oder Lage). */
     fun boardingIndex(stops: List<Stop>, at: Stop): Int {
@@ -68,6 +106,21 @@ object LegResolver {
      * laden, Zug über Namen und/oder Abfahrtszeit auswählen, Laufweg laden.
      */
     suspend fun resolve(p: ParsedLeg, date: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Match {
+        return try {
+            resolveOn(p, date, zone)
+        } catch (e: NotResolved) {
+            // Fahrplan für den Tag vielleicht noch nicht da: gleichen Wochentag in nächster Zeit nehmen
+            val probe = probeDate(date.plusDays(p.dayOffset.toLong())) ?: throw e
+            val diff = java.time.temporal.ChronoUnit.DAYS.between(probe, date.plusDays(p.dayOffset.toLong()))
+            try {
+                resolveOn(p, date.minusDays(diff), zone).copy(shiftDays = diff)
+            } catch (e2: NotResolved) {
+                throw e
+            }
+        }
+    }
+
+    private suspend fun resolveOn(p: ParsedLeg, date: LocalDate, zone: ZoneId): Match {
         val from = p.fromStation ?: throw NotResolved("Einstiegsbahnhof nicht erkannt")
         val depTime = p.departure ?: throw NotResolved("Abfahrtszeit nicht erkannt")
         val wanted = LocalDateTime.of(date.plusDays(p.dayOffset.toLong()), depTime).atZone(zone).toInstant()
