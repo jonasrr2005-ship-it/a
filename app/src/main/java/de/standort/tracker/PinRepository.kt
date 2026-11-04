@@ -8,13 +8,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Eine Firma bzw. ein Geschäft in der Nähe eines Pins. */
-data class Company(val name: String, val category: String, val distanceMeters: Int)
-
 /**
- * Ein gesetzter Pin. [address] und [companies] sind `null`, solange sie noch nicht
- * ermittelt werden konnten (z. B. ohne Internet); eine leere Firmenliste bedeutet
- * dagegen „keine Firmen in der Nähe“.
+ * Ein gesetzter Pin (eine Lieferung). [address] ist `null`, solange die Adresse noch
+ * nicht ermittelt werden konnte (z. B. ohne Internet).
  */
 data class Pin(
     val id: Long,
@@ -23,10 +19,11 @@ data class Pin(
     val longitude: Double,
     val accuracyMeters: Float?,
     val address: String?,
-    val companies: List<Company>?,
-) {
-    val isComplete: Boolean get() = address != null && companies != null
-}
+    /** Was abgeliefert wurde. */
+    val delivery: String,
+    /** Die Strecke, die beim Setzen des Pins aufgezeichnet wurde. */
+    val trackId: Long?,
+)
 
 /** Speichert die Pins dauerhaft in `pins.json`, bis der Nutzer sie löscht. */
 object PinRepository {
@@ -48,17 +45,25 @@ object PinRepository {
 
     fun get(id: Long): Pin? = _pins.value.firstOrNull { it.id == id }
 
+    fun forTrack(trackId: Long): List<Pin> = _pins.value.filter { it.trackId == trackId }
+
     @Synchronized
     fun add(pin: Pin) = save(_pins.value + pin)
 
     @Synchronized
-    fun update(pin: Pin) = save(_pins.value.map { if (it.id == pin.id) pin else it })
+    fun setAddress(id: Long, address: String) = modify(id) { it.copy(address = address) }
+
+    @Synchronized
+    fun setDelivery(id: Long, delivery: String) = modify(id) { it.copy(delivery = delivery) }
 
     @Synchronized
     fun delete(id: Long) = save(_pins.value.filterNot { it.id == id })
 
     @Synchronized
     fun deleteAll() = save(emptyList())
+
+    private fun modify(id: Long, change: (Pin) -> Pin) =
+        save(_pins.value.map { if (it.id == id) change(it) else it })
 
     private fun save(pins: List<Pin>) {
         _pins.value = pins
@@ -74,17 +79,8 @@ object PinRepository {
                 put("lon", pin.longitude)
                 pin.accuracyMeters?.let { put("accuracy", it.toDouble()) }
                 pin.address?.let { put("address", it) }
-                pin.companies?.let { companies ->
-                    put("companies", JSONArray().apply {
-                        for (c in companies) {
-                            put(JSONObject().apply {
-                                put("name", c.name)
-                                put("category", c.category)
-                                put("distance", c.distanceMeters)
-                            })
-                        }
-                    })
-                }
+                put("delivery", pin.delivery)
+                pin.trackId?.let { put("track", it) }
             })
         }
     }
@@ -100,12 +96,8 @@ object PinRepository {
                 longitude = o.getDouble("lon"),
                 accuracyMeters = if (o.has("accuracy")) o.getDouble("accuracy").toFloat() else null,
                 address = if (o.has("address")) o.getString("address") else null,
-                companies = o.optJSONArray("companies")?.let { list ->
-                    (0 until list.length()).map { j ->
-                        val c = list.getJSONObject(j)
-                        Company(c.getString("name"), c.getString("category"), c.getInt("distance"))
-                    }
-                },
+                delivery = o.optString("delivery"),
+                trackId = if (o.has("track")) o.getLong("track") else null,
             )
         }
     }

@@ -11,6 +11,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.provider.Settings
+import android.text.InputType
+import android.view.WindowManager
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -23,8 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import de.standort.tracker.databinding.ActivityMainBinding
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -39,6 +42,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var map: TrackMap
     private lateinit var mapType: MapType
     private var mapReady = false
+
+    /** Die Strecke, die auf der Karte gezeigt wird (sofern nicht gerade aufgezeichnet wird). */
+    private var selectedTrackId: Long? = null
+
+    /** Pins, deren Adresse gerade gesucht wird. */
+    private val addressLookups = mutableSetOf<Long>()
 
     /** Karte folgt der aktuellen Position, bis der Nutzer sie selbst verschiebt. */
     private var followPosition = true
@@ -62,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         TrackRepository.init(this)
         PinRepository.init(this)
+        selectedTrackId = savedInstanceState?.getLong(STATE_TRACK, -1L)?.takeIf { it != -1L }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -77,38 +87,41 @@ class MainActivity : AppCompatActivity() {
         binding.btnMapType.setOnClickListener { switchMapType() }
 
         binding.btnToggle.setOnClickListener {
-            if (TrackRepository.isRecording.value) stopTracking() else withLocationPermission(::startTracking)
+            if (TrackRepository.activeTrackId.value != null) stopTracking()
+            else withLocationPermission(::startTracking)
         }
-        binding.btnClear.setOnClickListener {
-            MaterialAlertDialogBuilder(this)
-                .setMessage(R.string.clear_track_question)
-                .setPositiveButton(R.string.delete) { _, _ -> TrackRepository.clear() }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
+        binding.btnTracks.setOnClickListener { showTrackList() }
         binding.btnCenter.setOnClickListener {
             followPosition = true
-            TrackRepository.points.value.lastOrNull()?.let { map.moveTo(it, animate = true) }
+            displayedTrack()?.points?.lastOrNull()?.let { map.moveTo(it, animate = true) }
         }
         binding.btnPin.setOnClickListener { withLocationPermission(::setPin) }
         binding.btnPins.setOnClickListener { showPinList() }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch { TrackRepository.points.collect(::showTrack) }
+                launch {
+                    combine(TrackRepository.tracks, TrackRepository.activeTrackId) { tracks, active ->
+                        tracks to active
+                    }.collect { (tracks, active) ->
+                        binding.btnTracks.text = getString(R.string.track_list, tracks.size)
+                        binding.btnToggle.setText(if (active != null) R.string.stop else R.string.start)
+                        showDisplayedTrack()
+                    }
+                }
                 launch {
                     PinRepository.pins.collect { pins ->
                         binding.btnPins.text = getString(R.string.pin_list, pins.size)
                         if (mapReady) map.showPins(pins)
                     }
                 }
-                launch {
-                    TrackRepository.isRecording.collect { recording ->
-                        binding.btnToggle.setText(if (recording) R.string.stop else R.string.start)
-                    }
-                }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        selectedTrackId?.let { outState.putLong(STATE_TRACK, it) }
     }
 
     // ---- Karte ----
@@ -123,8 +136,8 @@ class MainActivity : AppCompatActivity() {
         )
         map.attach(this, binding.mapContainer, savedInstanceState) {
             mapReady = true
-            TrackRepository.points.value.lastOrNull()?.let { map.moveTo(it, animate = false) }
-            map.showTrack(TrackRepository.points.value)
+            displayedTrack()?.points?.lastOrNull()?.let { map.moveTo(it, animate = false) }
+            showDisplayedTrack()
             map.showPins(PinRepository.pins.value)
         }
     }
@@ -141,18 +154,34 @@ class MainActivity : AppCompatActivity() {
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) map.onResume()
     }
 
-    private fun showTrack(points: List<TrackPoint>) {
-        binding.stats.text = getString(
-            R.string.stats,
-            points.size,
-            TrackRepository.formatDistance(TrackRepository.distanceMeters(points))
-        )
+    /** Laufende Aufnahme, sonst die ausgewählte, sonst die neueste Strecke. */
+    private fun displayedTrack(): Track? {
+        TrackRepository.activeTrackId.value?.let { id -> TrackRepository.get(id)?.let { return it } }
+        selectedTrackId?.let { id -> TrackRepository.get(id)?.let { return it } }
+        return TrackRepository.tracks.value.maxByOrNull { it.startTime }
+    }
+
+    private fun showDisplayedTrack() {
+        val track = displayedTrack()
+        val recording = track != null && track.id == TrackRepository.activeTrackId.value
+        binding.stats.text = when {
+            track == null -> getString(R.string.stats_none)
+            recording -> getString(
+                R.string.stats_recording,
+                formatTime(track.startTime),
+                TrackRepository.formatDistance(TrackRepository.distanceMeters(track.points))
+            )
+            else -> getString(
+                R.string.stats_track,
+                formatDay(track.startTime),
+                TrackRepository.formatDistance(TrackRepository.distanceMeters(track.points))
+            )
+        }
         if (!mapReady) return
+        val points = track?.points.orEmpty()
         map.showTrack(points)
         val last = points.lastOrNull()
-        if (last != null && followPosition && TrackRepository.isRecording.value) {
-            map.moveTo(last, animate = true)
-        }
+        if (recording && last != null && followPosition) map.moveTo(last, animate = true)
     }
 
     // ---- Berechtigungen & Aufzeichnung ----
@@ -184,6 +213,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         followPosition = true
+        selectedTrackId = null
         ContextCompat.startForegroundService(this, Intent(this, LocationService::class.java))
     }
 
@@ -191,7 +221,92 @@ class MainActivity : AppCompatActivity() {
         startService(Intent(this, LocationService::class.java).setAction(LocationService.ACTION_STOP))
     }
 
-    // ---- Pins ----
+    // ---- Strecken ----
+
+    private fun showTrackList() {
+        val tracks = TrackRepository.tracks.value.sortedByDescending { it.startTime }
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.tracks_title)
+            .setPositiveButton(R.string.close, null)
+        if (tracks.isEmpty()) {
+            builder.setMessage(R.string.tracks_empty)
+        } else {
+            val activeId = TrackRepository.activeTrackId.value
+            val labels = tracks.map { track ->
+                getString(
+                    R.string.track_list_item,
+                    formatDay(track.startTime),
+                    formatTime(track.startTime),
+                    if (track.id == activeId) getString(R.string.track_running)
+                    else formatTime(track.displayEndTime),
+                    TrackRepository.formatDistance(TrackRepository.distanceMeters(track.points)),
+                    PinRepository.forTrack(track.id).size
+                ) as CharSequence
+            }.toTypedArray()
+            builder.setItems(labels) { _, which -> showTrackDetails(tracks[which].id) }
+        }
+        builder.show()
+    }
+
+    private fun showTrackDetails(id: Long) {
+        val track = TrackRepository.get(id) ?: return
+        val running = track.id == TrackRepository.activeTrackId.value
+        val deliveries = PinRepository.forTrack(id).sortedBy { it.time }
+        val message = buildString {
+            appendLine(getString(R.string.track_start, formatTime(track.startTime)))
+            if (!running) appendLine(getString(R.string.track_end, formatTime(track.displayEndTime)))
+            appendLine(
+                getString(
+                    R.string.track_duration,
+                    formatDuration((if (running) System.currentTimeMillis() else track.displayEndTime) - track.startTime)
+                )
+            )
+            appendLine(
+                getString(
+                    R.string.track_distance,
+                    TrackRepository.formatDistance(TrackRepository.distanceMeters(track.points))
+                )
+            )
+            appendLine()
+            if (deliveries.isEmpty()) {
+                append(getString(R.string.track_no_deliveries))
+            } else {
+                appendLine(getString(R.string.track_deliveries, deliveries.size))
+                append(deliveries.joinToString("\n") {
+                    getString(
+                        R.string.track_delivery_line,
+                        formatTime(it.time),
+                        it.delivery.ifBlank { getString(R.string.delivery_empty) },
+                        it.address ?: getString(R.string.pin_address_unknown)
+                    )
+                })
+            }
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(formatDay(track.startTime))
+            .setMessage(message)
+            .setPositiveButton(R.string.track_show) { _, _ ->
+                selectedTrackId = track.id
+                followPosition = false
+                showDisplayedTrack()
+                track.points.lastOrNull()?.let { map.moveTo(it, animate = true) }
+            }
+            .setNegativeButton(R.string.delete) { _, _ ->
+                if (running) {
+                    Toast.makeText(this, R.string.track_delete_running, Toast.LENGTH_LONG).show()
+                } else {
+                    MaterialAlertDialogBuilder(this)
+                        .setMessage(R.string.track_delete_question)
+                        .setPositiveButton(R.string.delete) { _, _ -> TrackRepository.delete(track.id) }
+                        .setNegativeButton(R.string.cancel, null)
+                        .show()
+                }
+            }
+            .setNeutralButton(R.string.close, null)
+            .show()
+    }
+
+    // ---- Pins / Lieferungen ----
 
     private fun setPin() {
         lifecycleScope.launch {
@@ -209,36 +324,60 @@ class MainActivity : AppCompatActivity() {
                 longitude = location.longitude,
                 accuracyMeters = if (location.hasAccuracy()) location.accuracy else null,
                 address = null,
-                companies = null,
+                delivery = "",
+                trackId = TrackRepository.activeTrackId.value,
             )
             // Sofort speichern, damit der Pin auch ohne Internet erhalten bleibt.
             PinRepository.add(pin)
             map.moveTo(TrackPoint(pin.latitude, pin.longitude), animate = true)
-            lookUp(pin)
+            lookUpAddress(pin)
+            askDelivery(pin.id, isNew = true)
         }
     }
 
-    /** Sucht fehlende Adresse und Firmen, speichert sie und zeigt den Pin an. */
-    private suspend fun lookUp(pin: Pin) {
-        val progress = MaterialAlertDialogBuilder(this)
-            .setMessage(R.string.looking_up)
-            .setCancelable(false)
-            .show()
-        try {
-            val updated = coroutineScope {
-                val address = async {
-                    pin.address ?: NearbyLookup.address(applicationContext, pin.latitude, pin.longitude)
-                }
-                val companies = async {
-                    pin.companies ?: NearbyLookup.companies(pin.latitude, pin.longitude)
-                }
-                pin.copy(address = address.await(), companies = companies.await())
+    /** Sucht im Hintergrund die Adresse eines Pins und speichert sie. */
+    private fun lookUpAddress(pin: Pin) {
+        if (!addressLookups.add(pin.id)) return
+        lifecycleScope.launch {
+            try {
+                AddressLookup.address(applicationContext, pin.latitude, pin.longitude)
+                    ?.let { PinRepository.setAddress(pin.id, it) }
+            } finally {
+                addressLookups.remove(pin.id)
             }
-            PinRepository.update(updated)
-        } finally {
-            runCatching { progress.dismiss() }
         }
-        showPinDetails(pin.id)
+    }
+
+    /** Fragt, was abgeliefert wurde. Bei einem neuen Pin kann er auch verworfen werden. */
+    private fun askDelivery(id: Long, isNew: Boolean) {
+        val pin = PinRepository.get(id) ?: return
+        val padding = (20 * resources.displayMetrics.density).toInt()
+        val input = EditText(this).apply {
+            hint = getString(R.string.delivery_hint)
+            setText(pin.delivery)
+            setSelection(text.length)
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
+                InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        val container = FrameLayout(this).apply {
+            setPadding(padding, padding / 2, padding, 0)
+            addView(input)
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delivery_question)
+            .setView(container)
+            .setCancelable(!isNew)
+            .setPositiveButton(R.string.save) { _, _ ->
+                PinRepository.setDelivery(id, input.text.toString().trim())
+                showPinDetails(id)
+            }
+            .setNegativeButton(if (isNew) R.string.delivery_discard else R.string.cancel) { _, _ ->
+                if (isNew) PinRepository.delete(id)
+            }
+            .show()
+        input.requestFocus()
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
     }
 
     @SuppressLint("MissingPermission")
@@ -273,44 +412,37 @@ class MainActivity : AppCompatActivity() {
 
     private fun showPinDetails(id: Long) {
         val pin = PinRepository.get(id) ?: return
+        if (pin.address == null) lookUpAddress(pin)
         map.moveTo(TrackPoint(pin.latitude, pin.longitude), animate = true)
         followPosition = false
 
-        val builder = MaterialAlertDialogBuilder(this)
-            .setTitle(getString(R.string.pin_title, formatDate(pin.time)))
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.pin_title)
             .setMessage(describe(pin))
             .setPositiveButton(R.string.close, null)
             .setNegativeButton(R.string.delete) { _, _ -> confirmDeletePin(pin.id) }
-        if (!pin.isComplete) {
-            builder.setNeutralButton(R.string.retry) { _, _ ->
-                lifecycleScope.launch { lookUp(pin) }
-            }
-        }
-        builder.show()
+            .setNeutralButton(R.string.edit) { _, _ -> askDelivery(pin.id, isNew = false) }
+            .show()
     }
 
     private fun describe(pin: Pin): String = buildString {
-        appendLine(getString(R.string.pin_date, formatDate(pin.time)))
-        appendLine(getString(R.string.pin_time, formatTime(pin.time)))
-        appendLine(getString(R.string.pin_address, pin.address ?: getString(R.string.pin_address_unknown)))
+        appendLine(getString(R.string.pin_date, formatDay(pin.time)))
+        appendLine(getString(R.string.pin_time, formatTimeSeconds(pin.time)))
+        appendLine(
+            getString(R.string.pin_delivery, pin.delivery.ifBlank { getString(R.string.delivery_empty) })
+        )
+        appendLine(getString(R.string.pin_address, addressText(pin)))
         appendLine(
             getString(
                 R.string.pin_coordinates,
                 String.format(Locale.US, "%.6f, %.6f", pin.latitude, pin.longitude)
             )
         )
-        pin.accuracyMeters?.let { appendLine(getString(R.string.pin_accuracy, it.toInt())) }
-        appendLine()
-        appendLine(getString(R.string.pin_companies, NearbyLookup.RADIUS_METERS))
-        val companies = pin.companies
-        when {
-            companies == null -> append(getString(R.string.pin_companies_failed))
-            companies.isEmpty() -> append(getString(R.string.pin_no_companies))
-            else -> append(companies.joinToString("\n") {
-                getString(R.string.pin_company_line, it.name, it.category, it.distanceMeters)
-            })
-        }
+        pin.accuracyMeters?.let { append(getString(R.string.pin_accuracy, it.toInt())) }
     }
+
+    private fun addressText(pin: Pin): String = pin.address
+        ?: getString(if (pin.id in addressLookups) R.string.pin_address_loading else R.string.pin_address_unknown)
 
     private fun confirmDeletePin(id: Long) {
         MaterialAlertDialogBuilder(this)
@@ -329,16 +461,14 @@ class MainActivity : AppCompatActivity() {
             builder.setMessage(R.string.pins_empty)
         } else {
             val labels = pins.map { pin ->
-                val companies = pin.companies
-                val summary = when {
-                    companies == null -> pin.address ?: getString(R.string.pin_address_unknown)
-                    companies.isEmpty() ->
-                        "${pin.address ?: ""} · ${getString(R.string.pin_list_no_companies)}"
-                    else ->
-                        "${pin.address ?: ""} · ${getString(R.string.pin_list_companies, companies.size)}"
-                }
-                getString(R.string.pin_list_item, "${formatDate(pin.time)}, ${formatTime(pin.time)} Uhr", summary)
-            }.toTypedArray<CharSequence>()
+                getString(
+                    R.string.pin_list_item,
+                    formatDay(pin.time),
+                    formatTime(pin.time),
+                    pin.delivery.ifBlank { getString(R.string.delivery_empty) },
+                    addressText(pin)
+                ) as CharSequence
+            }.toTypedArray()
             builder.setItems(labels) { _, which -> showPinDetails(pins[which].id) }
             builder.setNeutralButton(R.string.pins_delete_all) { _, _ ->
                 MaterialAlertDialogBuilder(this)
@@ -351,11 +481,20 @@ class MainActivity : AppCompatActivity() {
         builder.show()
     }
 
-    private fun formatDate(time: Long): String =
-        SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date(time))
+    /** z. B. „Mittwoch, 04.11.2026“ */
+    private fun formatDay(time: Long): String =
+        SimpleDateFormat("EEEE, dd.MM.yyyy", Locale.GERMANY).format(Date(time))
 
     private fun formatTime(time: Long): String =
+        SimpleDateFormat("HH:mm", Locale.GERMANY).format(Date(time))
+
+    private fun formatTimeSeconds(time: Long): String =
         SimpleDateFormat("HH:mm:ss", Locale.GERMANY).format(Date(time))
+
+    private fun formatDuration(millis: Long): String {
+        val minutes = (millis / 60_000).coerceAtLeast(0)
+        return if (minutes < 60) "$minutes Min." else "${minutes / 60} Std. ${minutes % 60} Min."
+    }
 
     override fun onResume() {
         super.onResume()
@@ -369,5 +508,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val PREF_MAP_TYPE = "map_type"
+        private const val STATE_TRACK = "selected_track"
     }
 }

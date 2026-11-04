@@ -2,7 +2,7 @@
 
 Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
 **live als Strich auf einer Karte** einzeichnet. Dazu können Pins mit Datum,
-Uhrzeit, Adresse und den Firmen direkt an der Stelle gesetzt werden.
+Uhrzeit, Adresse und dem, was abgeliefert wurde, gesetzt werden.
 
 ## Karte umschaltbar
 
@@ -12,17 +12,16 @@ Die Wahl wird gespeichert.
 
 ## Funktionen
 
-- Live-Karte mit roter Linie für den Weg und Positionsmarker
+- Live-Karte mit roter Linie für die Strecke und Positionsmarker
 - Aufzeichnung läuft als Vordergrund-Dienst weiter – auch bei ausgeschaltetem Bildschirm
-- Benachrichtigung mit Punktanzahl, Strecke und „Stoppen“-Knopf
-- Weg wird gespeichert (`track.csv`) und bleibt nach Neustart erhalten
-- **Pin setzen:** speichert Datum, Uhrzeit, Koordinaten, Genauigkeit, Adresse und alle
-  Firmen im Umkreis von 50 m (bzw. „Keine Firmen in der Nähe“). Pins bleiben gespeichert
-  (`pins.json`), bis sie einzeln oder alle gelöscht werden.
+- **Mehrere Strecken:** jede Aufnahme (Start → Stopp) ist eine eigene Strecke. Die Liste
+  „Strecken“ zeigt Wochentag, Datum, Start-/Endzeit, Länge und Anzahl der Lieferungen;
+  jede Strecke lässt sich auf der Karte anzeigen oder löschen.
+- **Pin setzen (Lieferung):** speichert Datum mit Wochentag, Uhrzeit, Koordinaten,
+  Genauigkeit und die vollständige Adresse und fragt sofort „Was hast du abgeliefert?“.
+  Pins bleiben gespeichert (`pins.json`), bis sie einzeln oder alle gelöscht werden.
   - Adresse: Android-Geocoder, ersatzweise OpenStreetMap Nominatim
-  - Firmen: OpenStreetMap-Daten über die Overpass-API (kostenlos, ohne Schlüssel)
-  - Ohne Internet wird der Pin trotzdem gespeichert; Adresse/Firmen lassen sich später
-    mit „Erneut suchen“ nachladen.
+  - Ohne Internet wird der Pin trotzdem gespeichert, die Adresse wird später nachgeladen.
 
 ## Google-Maps-API-Schlüssel
 

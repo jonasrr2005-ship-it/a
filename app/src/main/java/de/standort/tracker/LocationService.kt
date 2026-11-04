@@ -61,8 +61,12 @@ class LocationService : Service(), LocationListener {
             stopTracking()
             return START_NOT_STICKY
         }
+        if (TrackRepository.activeTrackId.value == null) {
+            // Ohne Intent startet Android den Dienst nach einem Absturz neu:
+            // dann die unterbrochene Strecke fortsetzen, sonst eine neue beginnen.
+            if (intent == null) TrackRepository.resumeOrStart() else TrackRepository.startNewTrack()
+        }
         startLocationUpdates()
-        TrackRepository.setRecording(true)
         return START_STICKY
     }
 
@@ -109,14 +113,14 @@ class LocationService : Service(), LocationListener {
 
     private fun stopTracking() {
         locationManager.removeUpdates(this)
-        TrackRepository.setRecording(false)
+        TrackRepository.finishTrack()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
         locationManager.removeUpdates(this)
-        TrackRepository.setRecording(false)
+        TrackRepository.finishTrack()
         super.onDestroy()
     }
 
@@ -132,7 +136,9 @@ class LocationService : Service(), LocationListener {
     }
 
     private fun buildNotification(): Notification {
-        val points = TrackRepository.points.value
+        val points = TrackRepository.activeTrackId.value
+            ?.let { TrackRepository.get(it)?.points }
+            .orEmpty()
         val openApp = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
