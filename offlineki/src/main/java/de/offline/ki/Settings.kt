@@ -33,6 +33,10 @@ class Settings(context: Context) {
         get() = prefs.getString("activeModel", null)
         set(v) = prefs.edit().putString("activeModel", v).apply()
 
+    var activeImageModel: String?
+        get() = prefs.getString("activeImageModel", null)
+        set(v) = prefs.edit().putString("activeImageModel", v).apply()
+
     companion object {
         const val DEFAULT_PERSONA =
             "Herzlich, offen, ein bisschen frech und neugierig. Du hast eigene Meinungen, " +

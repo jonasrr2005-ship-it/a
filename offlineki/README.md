@@ -13,6 +13,29 @@ Optimiert für das **Samsung Galaxy S25** (Snapdragon 8 Elite, 12 GB RAM).
   Ist „Antworten laut vorlesen“ an, entsteht ein Gesprächsmodus: nach dem Vorlesen hört die
   App automatisch wieder zu (Mikrofon-Knopf beendet ihn).
 
+## Bilder malen 🎨
+
+Die KI kann auch **Bilder erzeugen – ebenfalls komplett offline** (mit
+[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)).
+
+- Einfach im Chat schreiben oder sagen: „Mal mir eine Katze im Weltall“, „Erstell ein Bild
+  von einem Leuchtturm im Sturm“ – oder Text eintippen und den **Bild-Knopf** drücken.
+- Die Text-KI übersetzt den Wunsch automatisch in einen englischen Bild-Prompt (Bildmodelle
+  verstehen fast nur Englisch) und berücksichtigt dabei das Gespräch („mal das mal“).
+- Bild antippen → in der Galerie speichern (Ordner „Offline KI“), neue Variante malen oder
+  den Prompt ansehen.
+- Dafür einmalig ein **Bildmodell** importieren (Menü → „Bildmodelle verwalten“), eine
+  einzelne Stable-Diffusion-Datei (`.safetensors` oder `.gguf`):
+
+  | Modell | Schritte | Dauer auf dem S25 (grob) |
+  | --- | --- | --- |
+  | SD-Turbo (Suche: „sd-turbo gguf“) | 4 | schnell, ca. 10–30 s |
+  | SD 1.5 mit „LCM“ im Namen (z. B. DreamShaper 8 LCM) | 6 | ca. 20–40 s |
+  | normales Stable Diffusion 1.5 | 20 | 1–2 min, beste Details |
+
+  Steht `turbo`, `lcm`, `lightning` oder `hyper` im Dateinamen, stellt die App automatisch
+  wenige Schritte ein. Bilder sind 512×512 Pixel. Die Zeiten sind Schätzungen.
+
 ## Einrichtung
 
 1. APK installieren (GitHub → Actions → „Offline KI APK“ → Artifact `offline-ki-apk`).
@@ -42,6 +65,9 @@ dieser App.
 - `src/main/cpp/llm.cpp` – JNI-Kern: Modell laden, Chat-Vorlage des Modells anwenden,
   KV-Cache zwischen den Nachrichten wiederverwenden (nur Neues wird gerechnet), Sampling
   (top-k/top-p/min-p, Wiederholungsstrafe), Text-Streaming.
+- `../imagegen/` – eigenes Modul für die Bild-KI (stable-diffusion.cpp, Version
+  `master-975-95b3090`). Sie bringt ihre eigene ggml-Version mit, daher eine getrennte `.so`
+  mit versteckten Symbolen.
 - llama.cpp wird beim Bauen in fester Version (`b12000`) per CMake geladen, nur arm64.
 - Zu lange Gespräche: die ältesten Nachrichten fallen automatisch aus dem „Gedächtnis“.
 

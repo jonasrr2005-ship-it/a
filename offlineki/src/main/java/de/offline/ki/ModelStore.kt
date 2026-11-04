@@ -6,12 +6,21 @@ import android.provider.OpenableColumns
 import java.io.File
 import java.io.IOException
 
-/** Verwaltet die .gguf-Modelldateien im privaten App-Speicher. */
-class ModelStore(private val context: Context) {
-    val dir: File = File(context.filesDir, "models").apply { mkdirs() }
+/**
+ * Verwaltet Modelldateien im privaten App-Speicher.
+ * Sprachmodelle: .gguf. Bildmodelle (Stable Diffusion): .safetensors, .gguf oder .ckpt.
+ */
+class ModelStore(
+    private val context: Context,
+    folder: String = "models",
+    private val extensions: List<String> = listOf(".gguf"),
+) {
+    val dir: File = File(context.filesDir, folder).apply { mkdirs() }
+
+    private fun accepted(name: String) = extensions.any { name.endsWith(it, ignoreCase = true) }
 
     fun list(): List<File> =
-        dir.listFiles { f -> f.isFile && f.name.endsWith(".gguf", ignoreCase = true) }
+        dir.listFiles { f -> f.isFile && accepted(f.name) }
             ?.sortedBy { it.name.lowercase() } ?: emptyList()
 
     fun file(name: String) = File(dir, name)
@@ -27,8 +36,8 @@ class ModelStore(private val context: Context) {
             }
         }
         name = name.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        if (!name.endsWith(".gguf", ignoreCase = true)) {
-            throw IOException("Das ist keine .gguf-Datei: $name")
+        if (!accepted(name)) {
+            throw IOException("Falscher Dateityp: $name\nErlaubt: ${extensions.joinToString(", ")}")
         }
         if (size > 0 && size > dir.usableSpace - 200L * 1024 * 1024) {
             throw IOException("Nicht genug freier Speicher (benötigt ca. ${size / 1_000_000} MB)")
@@ -37,9 +46,9 @@ class ModelStore(private val context: Context) {
         val target = File(dir, name)
         val tmp = File(dir, "$name.part")
         context.contentResolver.openInputStream(uri)?.use { input ->
-            // GGUF-Dateien beginnen mit den Bytes "GGUF"
             val magic = ByteArray(4)
-            if (input.read(magic) != 4 || String(magic, Charsets.US_ASCII) != "GGUF") {
+            if (input.read(magic) != 4) throw IOException("Datei ist leer")
+            if (name.endsWith(".gguf", ignoreCase = true) && String(magic, Charsets.US_ASCII) != "GGUF") {
                 throw IOException("Datei ist kein gültiges GGUF-Modell")
             }
             tmp.outputStream().buffered(1 shl 20).use { out ->

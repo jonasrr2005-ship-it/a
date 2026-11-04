@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "StandortTracker"
 include(":app")
 include(":offlineki")
+include(":imagegen")

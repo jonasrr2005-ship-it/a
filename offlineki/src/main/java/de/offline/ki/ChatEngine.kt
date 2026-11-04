@@ -51,7 +51,7 @@ class ChatEngine {
         val contents = ArrayList<String>()
         roles += "system"; contents += systemPrompt(settings)
         history.filter { it.text.isNotBlank() }.forEach {
-            roles += it.role; contents += it.text
+            roles += it.role; contents += it.forModel()
         }
         val sb = StringBuilder()
         LlamaNative.generate(
@@ -64,9 +64,42 @@ class ChatEngine {
         }
     }
 
+    /**
+     * Macht aus einem (meist deutschen) Bildwunsch einen englischen Prompt für das
+     * Bildmodell – Stable Diffusion versteht praktisch nur Englisch.
+     */
+    suspend fun imagePrompt(request: String, history: List<Message>): String? = withContext(dispatcher) {
+        if (loadedModel == null) return@withContext null
+        val context = history.takeLast(6).filter { it.text.isNotBlank() }
+            .joinToString("\n") { (if (it.role == "user") "Nutzer: " else "KI: ") + it.forModel() }
+        val user = buildString {
+            if (context.isNotBlank()) append("Bisheriges Gespräch (nur als Kontext):\n$context\n\n")
+            append("Bildwunsch: $request")
+        }
+        val sb = StringBuilder()
+        val err = LlamaNative.generate(
+            arrayOf("system", "user"), arrayOf(IMAGE_PROMPT_INSTRUCTION, user), 0.3f, 120,
+        ) { bytes ->
+            sb.append(String(bytes, Charsets.UTF_8))
+            !sb.contains('\n') || sb.trim().length < 3
+        }
+        if (err != null) return@withContext null
+        cleanReply(sb.toString())
+            .lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+            ?.removePrefix("Prompt:")?.trim()?.trim('"', '„', '“', '\'')
+            ?.takeIf { it.length > 3 }
+    }
+
     fun stop() = LlamaNative.stop()
 
     companion object {
+        private const val IMAGE_PROMPT_INSTRUCTION =
+            "You write prompts for the image generator Stable Diffusion. Turn the user's image request " +
+                "(usually in German) into ONE English prompt: comma-separated, main subject first, then " +
+                "details, setting, style, lighting, and finally \"high quality, detailed\". If the request " +
+                "refers to the conversation (e.g. \"draw that\"), use the context. Output ONLY the prompt " +
+                "on a single line, no explanations, at most 60 words."
+
         fun systemPrompt(s: Settings): String {
             val now = SimpleDateFormat("EEEE, d. MMMM yyyy, HH:mm 'Uhr'", Locale.GERMAN).format(Date())
             val partner = s.userName.ifBlank { "deinem Gegenüber" }

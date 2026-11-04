@@ -40,3 +40,5 @@ FetchContent_MakeAvailable(llama)
 add_library(offlineki SHARED llm.cpp)
 target_link_libraries(offlineki PRIVATE llama android log)
 target_compile_options(offlineki PRIVATE -O3)
+# ggml-Symbole verstecken (die Bild-KI bringt eine eigene ggml-Version mit).
+target_link_options(offlineki PRIVATE "-Wl,--exclude-libs,ALL")

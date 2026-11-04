@@ -2,6 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/action_new_chat" android:title="Neues Gespräch" />
     <item android:id="@+id/action_settings" android:title="Einstellungen" />
-    <item android:id="@+id/action_models" android:title="Modelle verwalten" />
+    <item android:id="@+id/action_models" android:title="Sprachmodelle verwalten" />
+    <item android:id="@+id/action_image_models" android:title="Bildmodelle verwalten" />
     <item android:id="@+id/action_about" android:title="Info" />
 </menu>

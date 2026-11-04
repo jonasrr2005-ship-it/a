@@ -74,6 +74,14 @@
             android:contentDescription="Sprechen"
             app:icon="@drawable/ic_mic" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/imageButton"
+            style="?attr/materialIconButtonStyle"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="Bild malen"
+            app:icon="@drawable/ic_image" />
+
         <EditText
             android:id="@+id/input"
             android:layout_width="0dp"
