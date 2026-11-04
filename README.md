@@ -1,5 +1,8 @@
 # Standort-Tracker (Android)
 
+> Außerdem im Repository: [**Offline KI**](offlineki/README.md) – ein KI-Gesprächspartner,
+> der komplett ohne Internet auf dem Handy läuft (Ordner `offlineki/`).
+
 Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
 **live als Strich auf einer Karte** einzeichnet. Dazu können Pins mit Datum,
 Uhrzeit, Adresse und dem, was abgeliefert wurde, gesetzt werden.

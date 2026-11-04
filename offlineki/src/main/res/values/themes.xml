@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.OfflineKI" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#6A1B9A</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#EADDF5</item>
+    </style>
+</resources>
