@@ -1,17 +1,14 @@
 package de.standort.tracker
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.Paint
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.MotionEvent
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -21,20 +18,26 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.JointType
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.Marker
+import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.Polyline
+import com.google.android.gms.maps.model.PolylineOptions
+import com.google.android.gms.maps.model.RoundCap
 import de.standort.tracker.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var track: Polyline
-    private lateinit var positionMarker: Marker
+    private var map: GoogleMap? = null
+    private var track: Polyline? = null
+    private var positionMarker: Marker? = null
 
     /** Karte folgt der aktuellen Position, bis der Nutzer sie selbst verschiebt. */
     private var followPosition = true
@@ -51,7 +54,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Configuration.getInstance().userAgentValue = packageName
         TrackRepository.init(this)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -62,7 +64,8 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        setupMap()
+        val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
+        mapFragment.getMapAsync(::setupMap)
 
         binding.btnToggle.setOnClickListener {
             if (TrackRepository.isRecording.value) stopTracking() else requestPermissionsAndStart()
@@ -70,7 +73,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnClear.setOnClickListener { TrackRepository.clear() }
         binding.btnCenter.setOnClickListener {
             followPosition = true
-            TrackRepository.points.value.lastOrNull()?.let { binding.map.controller.animateTo(it) }
+            TrackRepository.points.value.lastOrNull()?.let {
+                map?.animateCamera(CameraUpdateFactory.newLatLng(it))
+            }
         }
 
         lifecycleScope.launch {
@@ -85,51 +90,59 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupMap() {
-        val map = binding.map
-        map.setTileSource(TileSourceFactory.MAPNIK)
-        map.setMultiTouchControls(true)
-        map.zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-        map.controller.setZoom(17.0)
-        map.controller.setCenter(GeoPoint(51.1657, 10.4515)) // Mitte Deutschlands
+    private fun setupMap(googleMap: GoogleMap) {
+        map = googleMap
+        googleMap.uiSettings.isZoomControlsEnabled = false
+        googleMap.uiSettings.isMyLocationButtonEnabled = false
 
-        track = Polyline(map).apply {
-            outlinePaint.color = Color.rgb(229, 57, 53)
-            outlinePaint.strokeWidth = 12f
-            outlinePaint.strokeCap = Paint.Cap.ROUND
-            outlinePaint.strokeJoin = Paint.Join.ROUND
-        }
-        positionMarker = Marker(map).apply {
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-            icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_position)
-            setInfoWindow(null)
-        }
-        map.overlays.add(track)
-        map.overlays.add(positionMarker)
+        track = googleMap.addPolyline(
+            PolylineOptions()
+                .color(Color.rgb(229, 57, 53))
+                .width(14f)
+                .startCap(RoundCap())
+                .endCap(RoundCap())
+                .jointType(JointType.ROUND)
+        )
+        positionMarker = googleMap.addMarker(
+            MarkerOptions()
+                .position(LatLng(0.0, 0.0))
+                .anchor(0.5f, 0.5f)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                .visible(false)
+        )
 
-        map.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_MOVE) followPosition = false
-            false
+        googleMap.setOnCameraMoveStartedListener { reason ->
+            if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                followPosition = false
+            }
         }
 
-        TrackRepository.points.value.lastOrNull()?.let { map.controller.setCenter(it) }
+        val last = TrackRepository.points.value.lastOrNull()
+        if (last != null) {
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(last, 17f))
+        } else {
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(51.1657, 10.4515), 6f))
+        }
+        showTrack(TrackRepository.points.value)
     }
 
-    private fun showTrack(points: List<GeoPoint>) {
-        track.setPoints(points)
-        val last = points.lastOrNull()
-        positionMarker.isEnabled = last != null
-        if (last != null) {
-            positionMarker.position = last
-            if (followPosition) binding.map.controller.animateTo(last)
-        }
+    private fun showTrack(points: List<LatLng>) {
         binding.stats.text = getString(
             R.string.stats,
             points.size,
             TrackRepository.formatDistance(TrackRepository.distanceMeters(points))
         )
-        binding.map.invalidate()
+        val googleMap = map ?: return
+        track?.points = points
+        val last = points.lastOrNull()
+        positionMarker?.isVisible = last != null
+        if (last != null) {
+            positionMarker?.position = last
+            if (followPosition) {
+                val zoom = maxOf(googleMap.cameraPosition.zoom, 16f)
+                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(last, zoom))
+            }
+        }
     }
 
     private fun requestPermissionsAndStart() {
@@ -159,15 +172,5 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopTracking() {
         startService(Intent(this, LocationService::class.java).setAction(LocationService.ACTION_STOP))
-    }
-
-    override fun onResume() {
-        super.onResume()
-        binding.map.onResume()
-    }
-
-    override fun onPause() {
-        binding.map.onPause()
-        super.onPause()
     }
 }

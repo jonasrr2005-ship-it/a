@@ -1,10 +1,11 @@
 package de.standort.tracker
 
 import android.content.Context
+import android.location.Location
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.osmdroid.util.GeoPoint
 import java.io.File
 import java.util.Locale
 
@@ -14,8 +15,8 @@ import java.util.Locale
  */
 object TrackRepository {
 
-    private val _points = MutableStateFlow<List<GeoPoint>>(emptyList())
-    val points: StateFlow<List<GeoPoint>> = _points.asStateFlow()
+    private val _points = MutableStateFlow<List<LatLng>>(emptyList())
+    val points: StateFlow<List<LatLng>> = _points.asStateFlow()
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -32,7 +33,7 @@ object TrackRepository {
                 val parts = line.split(';')
                 val lat = parts.getOrNull(0)?.toDoubleOrNull()
                 val lon = parts.getOrNull(1)?.toDoubleOrNull()
-                if (lat != null && lon != null) GeoPoint(lat, lon) else null
+                if (lat != null && lon != null) LatLng(lat, lon) else null
             }
         }
     }
@@ -43,7 +44,7 @@ object TrackRepository {
 
     @Synchronized
     fun add(lat: Double, lon: Double, time: Long) {
-        _points.value = _points.value + GeoPoint(lat, lon)
+        _points.value = _points.value + LatLng(lat, lon)
         file?.appendText(String.format(Locale.US, "%.7f;%.7f;%d\n", lat, lon, time))
     }
 
@@ -54,8 +55,12 @@ object TrackRepository {
     }
 
     /** Gesamtlänge des Weges in Metern. */
-    fun distanceMeters(points: List<GeoPoint>): Double =
-        points.zipWithNext { a, b -> a.distanceToAsDouble(b) }.sum()
+    fun distanceMeters(points: List<LatLng>): Double =
+        points.zipWithNext { a, b ->
+            val result = FloatArray(1)
+            Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, result)
+            result[0].toDouble()
+        }.sum()
 
     fun formatDistance(meters: Double): String =
         if (meters < 1000) String.format(Locale.GERMANY, "%.0f m", meters)

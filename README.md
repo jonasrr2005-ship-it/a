@@ -1,7 +1,7 @@
 # Standort-Tracker (Android)
 
 Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
-**live als Strich auf einer Karte** (OpenStreetMap) einzeichnet.
+**live als Strich auf einer Google-Maps-Karte** einzeichnet.
 
 ## Funktionen
 
@@ -11,7 +11,20 @@ Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
 - Anzeige der Gesamtstrecke
 - Weg wird gespeichert (`track.csv` im App-Speicher) und bleibt nach Neustart erhalten
 - Karte folgt der Position; nach manuellem Verschieben wieder mit „Zentrieren“
-- Kein API-Schlüssel nötig (OpenStreetMap via osmdroid)
+
+## Google-Maps-API-Schlüssel
+
+Google Maps braucht einen (für Android-Apps kostenlosen) API-Schlüssel, sonst bleibt
+die Karte grau:
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/) ein Projekt anlegen
+   und die **Maps SDK for Android** aktivieren (Rechnungskonto erforderlich,
+   Kartenaufrufe im Android-SDK kosten nichts).
+2. Unter „APIs & Dienste → Anmeldedaten“ einen API-Schlüssel erstellen.
+3. Schlüssel eintragen:
+   - lokal: in `local.properties` die Zeile `MAPS_API_KEY=dein_schlüssel`
+   - GitHub Actions: im Repository unter *Settings → Secrets and variables → Actions*
+     ein Secret `MAPS_API_KEY` anlegen.
 
 ## Bauen
 
@@ -29,6 +42,7 @@ unter „Artifacts“ als `standort-tracker-apk` herunterladbar.
 ## Technik
 
 - Kotlin, minSdk 26, targetSdk 35
+- Google Maps SDK (`play-services-maps`)
 - `LocationManager` (GPS + Netzwerk), kein Google-Play-Services nötig
 - `LocationService`: Vordergrund-Dienst (`foregroundServiceType="location"`)
 - `TrackRepository`: hält die Punkte als `StateFlow`, die `MainActivity` zeichnet sie live
