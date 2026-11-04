@@ -2,12 +2,14 @@ package de.standort.tracker
 
 import android.content.Context
 import android.location.Location
-import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.Locale
+
+/** Ein Punkt auf der Karte, unabhängig von der verwendeten Kartenbibliothek. */
+data class TrackPoint(val latitude: Double, val longitude: Double)
 
 /**
  * Hält den aufgezeichneten Weg im Speicher und sichert jeden Punkt in einer CSV-Datei,
@@ -15,8 +17,8 @@ import java.util.Locale
  */
 object TrackRepository {
 
-    private val _points = MutableStateFlow<List<LatLng>>(emptyList())
-    val points: StateFlow<List<LatLng>> = _points.asStateFlow()
+    private val _points = MutableStateFlow<List<TrackPoint>>(emptyList())
+    val points: StateFlow<List<TrackPoint>> = _points.asStateFlow()
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -33,7 +35,7 @@ object TrackRepository {
                 val parts = line.split(';')
                 val lat = parts.getOrNull(0)?.toDoubleOrNull()
                 val lon = parts.getOrNull(1)?.toDoubleOrNull()
-                if (lat != null && lon != null) LatLng(lat, lon) else null
+                if (lat != null && lon != null) TrackPoint(lat, lon) else null
             }
         }
     }
@@ -44,7 +46,7 @@ object TrackRepository {
 
     @Synchronized
     fun add(lat: Double, lon: Double, time: Long) {
-        _points.value = _points.value + LatLng(lat, lon)
+        _points.value = _points.value + TrackPoint(lat, lon)
         file?.appendText(String.format(Locale.US, "%.7f;%.7f;%d\n", lat, lon, time))
     }
 
@@ -55,7 +57,7 @@ object TrackRepository {
     }
 
     /** Gesamtlänge des Weges in Metern. */
-    fun distanceMeters(points: List<LatLng>): Double =
+    fun distanceMeters(points: List<TrackPoint>): Double =
         points.zipWithNext { a, b ->
             val result = FloatArray(1)
             Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, result)

@@ -1,48 +1,47 @@
 # Standort-Tracker (Android)
 
 Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
-**live als Strich auf einer Google-Maps-Karte** einzeichnet.
+**live als Strich auf einer Karte** einzeichnet. Dazu können Pins mit Datum,
+Uhrzeit, Adresse und den Firmen direkt an der Stelle gesetzt werden.
+
+## Zwei Versionen
+
+| Version | Karte | API-Schlüssel | App-Name |
+|---|---|---|---|
+| `osm` | OpenStreetMap (osmdroid) | nicht nötig | Tracker (OSM) |
+| `google` | Google Maps | nötig (siehe unten) | Tracker (Google) |
+
+Beide Versionen haben verschiedene Paketnamen und können gleichzeitig installiert sein.
 
 ## Funktionen
 
-- Live-Karte mit roter Linie für den gelaufenen/gefahrenen Weg und Positionsmarker
+- Live-Karte mit roter Linie für den Weg und Positionsmarker
 - Aufzeichnung läuft als Vordergrund-Dienst weiter – auch bei ausgeschaltetem Bildschirm
 - Benachrichtigung mit Punktanzahl, Strecke und „Stoppen“-Knopf
-- Anzeige der Gesamtstrecke
-- Weg wird gespeichert (`track.csv` im App-Speicher) und bleibt nach Neustart erhalten
-- Karte folgt der Position; nach manuellem Verschieben wieder mit „Zentrieren“
+- Weg wird gespeichert (`track.csv`) und bleibt nach Neustart erhalten
+- **Pin setzen:** speichert Datum, Uhrzeit, Koordinaten, Genauigkeit, Adresse und alle
+  Firmen im Umkreis von 50 m (bzw. „Keine Firmen in der Nähe“). Pins bleiben gespeichert
+  (`pins.json`), bis sie einzeln oder alle gelöscht werden.
+  - Adresse: Android-Geocoder, ersatzweise OpenStreetMap Nominatim
+  - Firmen: OpenStreetMap-Daten über die Overpass-API (kostenlos, ohne Schlüssel)
+  - Ohne Internet wird der Pin trotzdem gespeichert; Adresse/Firmen lassen sich später
+    mit „Erneut suchen“ nachladen.
 
-## Google-Maps-API-Schlüssel
-
-Google Maps braucht einen (für Android-Apps kostenlosen) API-Schlüssel, sonst bleibt
-die Karte grau:
+## Google-Maps-API-Schlüssel (nur Version `google`)
 
 1. In der [Google Cloud Console](https://console.cloud.google.com/) ein Projekt anlegen
-   und die **Maps SDK for Android** aktivieren (Rechnungskonto erforderlich,
-   Kartenaufrufe im Android-SDK kosten nichts).
+   und die **Maps SDK for Android** aktivieren.
 2. Unter „APIs & Dienste → Anmeldedaten“ einen API-Schlüssel erstellen.
 3. Schlüssel eintragen:
    - lokal: in `local.properties` die Zeile `MAPS_API_KEY=dein_schlüssel`
-   - GitHub Actions: im Repository unter *Settings → Secrets and variables → Actions*
-     ein Secret `MAPS_API_KEY` anlegen.
+   - GitHub Actions: Repository-Secret `MAPS_API_KEY`
 
 ## Bauen
 
-Mit Android Studio öffnen und starten, oder auf der Kommandozeile
-(Android SDK erforderlich):
-
 ```bash
-./gradlew assembleDebug
-# APK: app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleOsmDebug      # app/build/outputs/apk/osm/debug/app-osm-debug.apk
+./gradlew assembleGoogleDebug   # app/build/outputs/apk/google/debug/app-google-debug.apk
 ```
 
-Bei jedem Push baut außerdem GitHub Actions die APK; sie ist im Workflow-Lauf
-unter „Artifacts“ als `standort-tracker-apk` herunterladbar.
-
-## Technik
-
-- Kotlin, minSdk 26, targetSdk 35
-- Google Maps SDK (`play-services-maps`)
-- `LocationManager` (GPS + Netzwerk), kein Google-Play-Services nötig
-- `LocationService`: Vordergrund-Dienst (`foregroundServiceType="location"`)
-- `TrackRepository`: hält die Punkte als `StateFlow`, die `MainActivity` zeichnet sie live
+GitHub Actions baut bei jedem Push beide APKs (Artifacts `tracker-osm-apk` und
+`tracker-google-apk`).
