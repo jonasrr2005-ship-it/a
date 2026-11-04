@@ -3,5 +3,12 @@
         <item name="colorPrimary">#6A1B9A</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondaryContainer">#EADDF5</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.OfflineKI.Dialog</item>
+    </style>
+
+    <!-- Dialog-Knöpfe in gut lesbarer Farbe (im Dunkelmodus heller, siehe values-night) -->
+    <style name="ThemeOverlay.OfflineKI.Dialog" parent="ThemeOverlay.Material3.Dialog.Alert">
+        <item name="colorPrimary">@color/dialog_accent</item>
+        <item name="colorAccent">@color/dialog_accent</item>
     </style>
 </resources>

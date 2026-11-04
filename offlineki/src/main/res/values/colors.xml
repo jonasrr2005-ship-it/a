@@ -4,4 +4,5 @@
     <color name="bubble_user_text">#FFFFFF</color>
     <color name="bubble_ai">#ECE6F0</color>
     <color name="bubble_ai_text">#1D1B20</color>
+    <color name="dialog_accent">#6A1B9A</color>
 </resources>

@@ -1,4 +1,5 @@
 <resources>
     <color name="bubble_ai">#2B2930</color>
     <color name="bubble_ai_text">#E6E0E9</color>
+    <color name="dialog_accent">#D0BCFF</color>
 </resources>
