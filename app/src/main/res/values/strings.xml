@@ -36,6 +36,7 @@
     <string name="track_deliveries">📦 Lieferungen (%1$d):</string>
     <string name="track_no_deliveries">Keine Lieferungen auf dieser Strecke.</string>
     <string name="track_delivery_line">• %1$s Uhr – %2$s\n   %3$s</string>
+    <string name="track_pin_hint">Tipp: „Auf Karte zeigen“ und dann auf einen Pin tippen, um ihn zu bearbeiten oder zu löschen.</string>
     <string name="track_show">Auf Karte zeigen</string>
     <string name="track_delete_question">Diese Strecke mit allen %1$d Lieferungen (Pins) wirklich endgültig löschen? Das kann nicht rückgängig gemacht werden.</string>
     <string name="track_delete_running">Die laufende Strecke kann erst nach dem Stoppen gelöscht werden.</string>
@@ -55,5 +56,7 @@
     <string name="pin_address_unknown">nicht ermittelt (kein Internet?)</string>
     <string name="pin_coordinates">🌐 Koordinaten: %1$s</string>
     <string name="pin_accuracy">🎯 Genauigkeit: ± %1$d m</string>
+    <string name="pin_delete">Pin löschen</string>
+    <string name="pin_delete_question">Diesen Pin (%1$s Uhr) wirklich löschen? Das kann nicht rückgängig gemacht werden.</string>
     <string name="pin_needs_recording">Pins gehören immer zu einer Strecke. Soll jetzt eine Aufzeichnung gestartet werden?</string>
 </resources>

@@ -275,6 +275,9 @@ class MainActivity : AppCompatActivity() {
                         it.address ?: getString(R.string.pin_address_unknown)
                     )
                 })
+                appendLine()
+                appendLine()
+                append(getString(R.string.track_pin_hint))
             }
         }
         MaterialAlertDialogBuilder(this)
@@ -356,7 +359,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Fragt, was abgeliefert wurde. Ein neuer Pin muss gespeichert werden. */
+    /** Fragt, was abgeliefert wurde. Ein falsch gesetzter neuer Pin kann gelöscht werden. */
     private fun askDelivery(id: Long, isNew: Boolean) {
         val pin = PinRepository.get(id) ?: return
         val padding = (20 * resources.displayMetrics.density).toInt()
@@ -380,7 +383,13 @@ class MainActivity : AppCompatActivity() {
                 PinRepository.setDelivery(id, input.text.toString().trim())
                 showPinDetails(id)
             }
-        if (!isNew) builder.setNegativeButton(R.string.cancel, null)
+        if (isNew) {
+            builder.setNegativeButton(R.string.pin_delete) { _, _ ->
+                confirmDeletePin(id, onCancel = { askDelivery(id, isNew = true) })
+            }
+        } else {
+            builder.setNegativeButton(R.string.cancel, null)
+        }
         val dialog = builder.show()
         input.requestFocus()
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
@@ -426,6 +435,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.pin_title)
             .setMessage(describe(pin))
             .setPositiveButton(R.string.close, null)
+            .setNegativeButton(R.string.delete) { _, _ -> confirmDeletePin(pin.id) }
             .setNeutralButton(R.string.edit) { _, _ -> askDelivery(pin.id, isNew = false) }
             .show()
     }
@@ -448,6 +458,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun addressText(pin: Pin): String = pin.address
         ?: getString(if (pin.id in addressLookups) R.string.pin_address_loading else R.string.pin_address_unknown)
+
+    /** Löscht einen einzelnen Pin nach Sicherheitsabfrage. */
+    private fun confirmDeletePin(id: Long, onCancel: () -> Unit = {}) {
+        val pin = PinRepository.get(id) ?: return
+        MaterialAlertDialogBuilder(this)
+            .setMessage(getString(R.string.pin_delete_question, formatTime(pin.time)))
+            .setPositiveButton(R.string.delete) { _, _ -> PinRepository.delete(id) }
+            .setNegativeButton(R.string.cancel) { _, _ -> onCancel() }
+            .setOnCancelListener { onCancel() }
+            .show()
+    }
 
     /** z. B. „Mittwoch, 04.11.2026“ */
     private fun formatDay(time: Long): String =

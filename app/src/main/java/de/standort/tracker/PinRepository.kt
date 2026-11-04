@@ -26,8 +26,8 @@ data class Pin(
 )
 
 /**
- * Speichert die Pins dauerhaft in `pins.json`. Pins gehören immer zu einer Strecke
- * und werden nur zusammen mit ihr gelöscht.
+ * Speichert die Pins dauerhaft in `pins.json`. Pins gehören immer zu einer Strecke;
+ * sie können einzeln gelöscht werden und verschwinden mit ihrer Strecke.
  */
 object PinRepository {
 
@@ -61,6 +61,9 @@ object PinRepository {
 
     @Synchronized
     fun assignTrack(id: Long, trackId: Long) = modify(id) { it.copy(trackId = trackId) }
+
+    @Synchronized
+    fun delete(id: Long) = save(_pins.value.filterNot { it.id == id })
 
     @Synchronized
     fun deleteForTrack(trackId: Long) = save(_pins.value.filterNot { it.trackId == trackId })

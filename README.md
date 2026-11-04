@@ -21,7 +21,7 @@ Die Wahl wird gespeichert.
   dieser Strecke. Gespeichert werden Datum mit Wochentag, Uhrzeit, Koordinaten,
   Genauigkeit und die vollständige Adresse; die App fragt sofort „Was hast du abgeliefert?“.
 - **Löschen:** nur ganze Strecken samt allen ihren Pins, nach einer Sicherheitsabfrage.
-  Einzelne Pins können nicht gelöscht werden.
+  Einzelne Pins (z. B. falsch gesetzte) lassen sich ebenfalls mit Sicherheitsabfrage löschen.
   - Adresse: Android-Geocoder, ersatzweise OpenStreetMap Nominatim
   - Ohne Internet wird der Pin trotzdem gespeichert, die Adresse wird später nachgeladen.
 
