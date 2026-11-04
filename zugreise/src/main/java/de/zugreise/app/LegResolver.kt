@@ -117,8 +117,8 @@ object LegResolver {
         val stops = ArrayList<Stop>()
         for (ps in p.stops) {
             val found = db.find(ps.name, near) ?: return null
-            // Plausibel? Nächster Halt mehr als 400 km entfernt -> wohl falscher Bahnhof
-            if (near != null && Geo.distance(near, found.position) > 400_000) return null
+            // Plausibel? Nächster Halt mehr als 1000 km entfernt -> wohl falscher Bahnhof
+            if (near != null && Geo.distance(near, found.position) > 1_000_000) return null
             near = found.position
             fun iso(t: java.time.LocalTime?): String? {
                 if (t == null) return null
