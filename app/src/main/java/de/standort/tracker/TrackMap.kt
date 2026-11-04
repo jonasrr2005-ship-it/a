@@ -4,9 +4,20 @@ import android.os.Bundle
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 
+/** Die Kartenarten, zwischen denen in der App umgeschaltet werden kann. */
+enum class MapType {
+    OSM,
+    GOOGLE;
+
+    fun create(): TrackMap = when (this) {
+        OSM -> OsmTrackMap()
+        GOOGLE -> GoogleTrackMap()
+    }
+}
+
 /**
- * Die Karte, auf der Weg und Pins angezeigt werden. Jede App-Version (OpenStreetMap
- * bzw. Google Maps) liefert über `MapFactory` ihre eigene Umsetzung.
+ * Die Karte, auf der Weg und Pins angezeigt werden – umgesetzt mit OpenStreetMap
+ * ([OsmTrackMap]) oder Google Maps ([GoogleTrackMap]).
  */
 interface TrackMap {
 
@@ -23,6 +34,9 @@ interface TrackMap {
         savedInstanceState: Bundle?,
         onReady: () -> Unit,
     )
+
+    /** Entfernt die Karte wieder aus dem Container (beim Umschalten der Kartenart). */
+    fun detach(activity: AppCompatActivity, container: ViewGroup)
 
     fun showTrack(points: List<TrackPoint>)
 

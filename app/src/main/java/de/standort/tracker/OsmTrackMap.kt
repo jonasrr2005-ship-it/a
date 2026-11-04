@@ -16,12 +16,8 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 
-object MapFactory {
-    fun create(): TrackMap = OsmTrackMap()
-}
-
 /** Karte mit OpenStreetMap (osmdroid), kein API-Schlüssel nötig. */
-private class OsmTrackMap : TrackMap {
+class OsmTrackMap : TrackMap {
 
     override var onUserMoved: () -> Unit = {}
     override var onPinClicked: (Long) -> Unit = {}
@@ -70,6 +66,12 @@ private class OsmTrackMap : TrackMap {
             false
         }
         onReady()
+    }
+
+    override fun detach(activity: AppCompatActivity, container: ViewGroup) {
+        map.onPause()
+        container.removeView(map)
+        map.onDetach()
     }
 
     override fun showTrack(points: List<TrackPoint>) {

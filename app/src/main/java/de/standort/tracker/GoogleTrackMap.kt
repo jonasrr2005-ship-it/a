@@ -16,12 +16,8 @@ import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.gms.maps.model.RoundCap
 
-object MapFactory {
-    fun create(): TrackMap = GoogleTrackMap()
-}
-
 /** Karte mit Google Maps (benötigt einen API-Schlüssel, siehe README). */
-private class GoogleTrackMap : TrackMap {
+class GoogleTrackMap : TrackMap {
 
     override var onUserMoved: () -> Unit = {}
     override var onPinClicked: (Long) -> Unit = {}
@@ -73,6 +69,12 @@ private class GoogleTrackMap : TrackMap {
             }
             onReady()
         }
+    }
+
+    override fun detach(activity: AppCompatActivity, container: ViewGroup) {
+        val fm = activity.supportFragmentManager
+        fm.findFragmentByTag(TAG)?.let { fm.beginTransaction().remove(it).commitNow() }
+        map = null
     }
 
     override fun showTrack(points: List<TrackPoint>) {

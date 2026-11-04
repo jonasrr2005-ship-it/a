@@ -15,15 +15,11 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build debug APKs
-        run: ./gradlew assembleOsmDebug assembleGoogleDebug
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
         env:
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
       - uses: actions/upload-artifact@v4
         with:
-          name: tracker-osm-apk
-          path: app/build/outputs/apk/osm/debug/app-osm-debug.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tracker-google-apk
-          path: app/build/outputs/apk/google/debug/app-google-debug.apk
+          name: standort-tracker-apk
+          path: app/build/outputs/apk/debug/app-debug.apk

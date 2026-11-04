@@ -23,20 +23,8 @@ android {
         targetSdk = 35
         versionCode = 3
         versionName = "1.2"
-    }
-
-    // Zwei Versionen der App, die nebeneinander installiert werden können.
-    flavorDimensions += "karte"
-    productFlavors {
-        create("osm") {
-            dimension = "karte"
-            applicationIdSuffix = ".osm"
-        }
-        create("google") {
-            dimension = "karte"
-            applicationIdSuffix = ".google"
-            manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
-        }
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        buildConfigField("boolean", "HAS_MAPS_KEY", (mapsApiKey.isNotBlank()).toString())
     }
 
     buildTypes {
@@ -53,6 +41,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
@@ -64,6 +53,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     // OpenStreetMap-Karte, kein API-Schlüssel nötig
-    "osmImplementation"("org.osmdroid:osmdroid-android:6.1.20")
-    "googleImplementation"("com.google.android.gms:play-services-maps:19.0.0")
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
 }

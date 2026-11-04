@@ -4,14 +4,11 @@ Android-App, die den eigenen Standort aufzeichnet und den zurückgelegten Weg
 **live als Strich auf einer Karte** einzeichnet. Dazu können Pins mit Datum,
 Uhrzeit, Adresse und den Firmen direkt an der Stelle gesetzt werden.
 
-## Zwei Versionen
+## Karte umschaltbar
 
-| Version | Karte | API-Schlüssel | App-Name |
-|---|---|---|---|
-| `osm` | OpenStreetMap (osmdroid) | nicht nötig | Tracker (OSM) |
-| `google` | Google Maps | nötig (siehe unten) | Tracker (Google) |
-
-Beide Versionen haben verschiedene Paketnamen und können gleichzeitig installiert sein.
+Über den Knopf **„🗺 Karte: …“** wechselt man jederzeit zwischen **OpenStreetMap**
+(kein Schlüssel nötig) und **Google Maps** (braucht einen API-Schlüssel, siehe unten).
+Die Wahl wird gespeichert.
 
 ## Funktionen
 
@@ -27,7 +24,7 @@ Beide Versionen haben verschiedene Paketnamen und können gleichzeitig installie
   - Ohne Internet wird der Pin trotzdem gespeichert; Adresse/Firmen lassen sich später
     mit „Erneut suchen“ nachladen.
 
-## Google-Maps-API-Schlüssel (nur Version `google`)
+## Google-Maps-API-Schlüssel
 
 1. In der [Google Cloud Console](https://console.cloud.google.com/) ein Projekt anlegen
    und die **Maps SDK for Android** aktivieren.
@@ -39,9 +36,7 @@ Beide Versionen haben verschiedene Paketnamen und können gleichzeitig installie
 ## Bauen
 
 ```bash
-./gradlew assembleOsmDebug      # app/build/outputs/apk/osm/debug/app-osm-debug.apk
-./gradlew assembleGoogleDebug   # app/build/outputs/apk/google/debug/app-google-debug.apk
+./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-GitHub Actions baut bei jedem Push beide APKs (Artifacts `tracker-osm-apk` und
-`tracker-google-apk`).
+GitHub Actions baut bei jedem Push die APK (Artifact `standort-tracker-apk`).

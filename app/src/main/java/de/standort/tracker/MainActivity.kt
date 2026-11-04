@@ -36,7 +36,8 @@ import kotlin.coroutines.resume
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val map: TrackMap = MapFactory.create()
+    private lateinit var map: TrackMap
+    private lateinit var mapType: MapType
     private var mapReady = false
 
     /** Karte folgt der aktuellen Position, bis der Nutzer sie selbst verschiebt. */
@@ -70,14 +71,10 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        map.onUserMoved = { followPosition = false }
-        map.onPinClicked = ::showPinDetails
-        map.attach(this, binding.mapContainer, savedInstanceState) {
-            mapReady = true
-            TrackRepository.points.value.lastOrNull()?.let { map.moveTo(it, animate = false) }
-            map.showTrack(TrackRepository.points.value)
-            map.showPins(PinRepository.pins.value)
-        }
+        val savedType = getPreferences(MODE_PRIVATE).getString(PREF_MAP_TYPE, null)
+        mapType = MapType.entries.firstOrNull { it.name == savedType } ?: MapType.OSM
+        attachMap(savedInstanceState)
+        binding.btnMapType.setOnClickListener { switchMapType() }
 
         binding.btnToggle.setOnClickListener {
             if (TrackRepository.isRecording.value) stopTracking() else withLocationPermission(::startTracking)
@@ -112,6 +109,36 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // ---- Karte ----
+
+    private fun attachMap(savedInstanceState: Bundle?) {
+        mapReady = false
+        map = mapType.create()
+        map.onUserMoved = { followPosition = false }
+        map.onPinClicked = ::showPinDetails
+        binding.btnMapType.setText(
+            if (mapType == MapType.OSM) R.string.map_type_osm else R.string.map_type_google
+        )
+        map.attach(this, binding.mapContainer, savedInstanceState) {
+            mapReady = true
+            TrackRepository.points.value.lastOrNull()?.let { map.moveTo(it, animate = false) }
+            map.showTrack(TrackRepository.points.value)
+            map.showPins(PinRepository.pins.value)
+        }
+    }
+
+    /** Wechselt zwischen OpenStreetMap und Google Maps; die Wahl wird gespeichert. */
+    private fun switchMapType() {
+        map.detach(this, binding.mapContainer)
+        mapType = if (mapType == MapType.OSM) MapType.GOOGLE else MapType.OSM
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_MAP_TYPE, mapType.name).apply()
+        if (mapType == MapType.GOOGLE && !BuildConfig.HAS_MAPS_KEY) {
+            Toast.makeText(this, R.string.google_no_key, Toast.LENGTH_LONG).show()
+        }
+        attachMap(null)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) map.onResume()
     }
 
     private fun showTrack(points: List<TrackPoint>) {
@@ -338,5 +365,9 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         map.onPause()
         super.onPause()
+    }
+
+    companion object {
+        private const val PREF_MAP_TYPE = "map_type"
     }
 }
