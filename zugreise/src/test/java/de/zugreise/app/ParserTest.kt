@@ -117,4 +117,45 @@ class ParserTest {
         assertTrue(LegResolver.sameStation("Hamm(Westf)Hbf", "Hamm (Westf) Hbf"))
         assertTrue(!LegResolver.sameStation("Hamburg Hbf", "Hamburg-Altona"))
     }
+
+    @Test
+    fun intermediateStopsAreRecognizedAndBuiltOffline() {
+        val r = ShareParser.parse(
+            """
+            05.11.2026
+            10:24 München Hbf
+            ICE 578
+            10:54 10:56 Augsburg Hbf
+            12:01 - 12:03 Würzburg Hbf
+            14:31 Hamburg Hbf
+            14:45 Hamburg Hbf
+            RE 5
+            15:10 Buxtehude
+            15:40 Stade
+            """.trimIndent(), today,
+        )
+        assertEquals(2, r.legs.size)
+        val ice = r.legs[0]
+        assertTrue(ice.hasIntermediateStops)
+        assertEquals(listOf("München Hbf", "Augsburg Hbf", "Würzburg Hbf", "Hamburg Hbf"), ice.stops.map { it.name })
+        assertEquals(LocalTime.of(10, 54), ice.stops[1].arrival)
+        assertEquals(LocalTime.of(10, 56), ice.stops[1].departure)
+
+        val db = java.io.File("src/main/assets/stations.txt.gz").inputStream().use { StationDb(it) }
+        val leg = LegResolver.fromText(ice, r.date!!, db, java.time.ZoneId.of("Europe/Berlin"))!!
+        assertEquals(4, leg.stops.size)
+        assertEquals(48.14, leg.stops[0].lat, 0.01)
+        assertEquals(53.55, leg.stops[3].lat, 0.01)
+        assertEquals("2026-11-05T09:24:00Z", leg.stops[0].scheduledDeparture)
+        assertEquals("2026-11-05T13:31:00Z", leg.stops[3].scheduledArrival)
+    }
+
+    @Test
+    fun stationListFindsSmallStations() {
+        val db = java.io.File("src/main/assets/stations.txt.gz").inputStream().use { StationDb(it) }
+        assertTrue(db.find("Rahden") != null)
+        assertTrue(db.find("Rheda-Wiedenbrück") != null)
+        assertTrue(db.find("Hamm(Westf)Hbf") != null)
+        assertTrue(db.find("Hamburg Hauptbahnhof") != null)
+    }
 }

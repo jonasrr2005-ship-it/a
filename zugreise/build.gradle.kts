@@ -11,8 +11,8 @@ android {
         applicationId = "de.zugreise.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     // Fester Signaturschlüssel, damit neue APKs als Update installiert werden können.
@@ -65,8 +65,9 @@ dependencies {
     // OpenStreetMap-Karte, kein API-Schlüssel nötig
     implementation("org.osmdroid:osmdroid-android:6.1.20")
 
-    // Texterkennung für geteilte Bilder/Screenshots, läuft offline auf dem Gerät
-    implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Texterkennung für geteilte Bilder/Screenshots (auf dem Gerät; Modell kommt über die
+    // Google-Play-Dienste, dadurch bleibt die APK klein)
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

@@ -27,14 +27,14 @@ class LiveApiTest {
     @Test
     fun stationSearch() = runBlocking {
         for (q in listOf("Rahden", "Rahden Bahnhof", "Rheda-Wiedenbrück", "München Hbf")) {
-            val found = TransitApi.searchStations(q)
+            val found = TransitApi.searchStations(q, trainsOnly = true)
             println("SUCHE '$q': " + found.take(6).joinToString(" | ") { "$it [${it.id}]" })
         }
     }
 
     @Test
     fun rahdenDepartures() = runBlocking {
-        val found = TransitApi.searchStations("Rahden")
+        val found = TransitApi.searchStations("Rahden", trainsOnly = true)
         for (st in found.take(3)) {
             val trains = TransitApi.departures(st.id, Instant.now(), 24, trainsOnly = true)
             val all = TransitApi.departures(st.id, Instant.now(), null, trainsOnly = false)
@@ -46,7 +46,7 @@ class LiveApiTest {
 
     @Test
     fun fullChain() = runBlocking {
-        val st = TransitApi.searchStations("Rheda-Wiedenbrück").first { it.hasTrains != false }
+        val st = TransitApi.searchStations("Rheda-Wiedenbrück", trainsOnly = true).first()
         val deps = TransitApi.departures(st.id, Instant.now(), null, trainsOnly = true)
         println("ABFAHRTEN $st: " + deps.take(5).joinToString { "${Times.time(it.stop.scheduledDeparture, it.stop.tz)} ${it.name}→${it.headsign}" })
         assertTrue("keine Abfahrten", deps.isNotEmpty())

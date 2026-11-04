@@ -20,6 +20,8 @@ import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import de.zugreise.app.databinding.ActivityImportBinding
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.time.Instant
@@ -167,7 +169,8 @@ class ShareImportActivity : AppCompatActivity() {
         }
         val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val check = CheckBox(this).apply {
-            text = leg.label() + if (leg.dayOffset > 0) "  (+${leg.dayOffset} Tag)" else ""
+            text = leg.label() + (if (leg.dayOffset > 0) "  (+${leg.dayOffset} Tag)" else "") +
+                (if (leg.hasIntermediateStops) "\n${leg.stops.size} Halte im Text – wird ohne Internet übernommen" else "")
             isChecked = leg.fromStation != null && leg.departure != null
             setTypeface(typeface, Typeface.BOLD)
         }
@@ -203,7 +206,18 @@ class ShareImportActivity : AppCompatActivity() {
             var failed = 0
             for (row in selected) {
                 row.state.visibility = View.VISIBLE
-                row.state.text = "⏳ Suche Zug und Halte …"
+                // 1. Stehen alle Halte im Text? Dann ohne Internet übernehmen.
+                if (row.leg.hasIntermediateStops) {
+                    row.state.text = "⏳ Übernehme Halte aus dem Text …"
+                    val leg = offlineLeg(row.leg)
+                    if (leg != null) {
+                        store.addLeg(journeyId, leg)
+                        markDone(row, "✓ ${leg.stops.size} Halte aus dem Text übernommen (ohne Internet)")
+                        continue
+                    }
+                }
+                // 2. Sonst Zug im Fahrplan suchen (mit allen Zwischenhalten und Gleisverlauf)
+                row.state.text = "⏳ Suche Zug und Halte im Internet …"
                 try {
                     val match = LegResolver.resolve(row.leg, date)
                     val alight = match.alight ?: askAlight(match)
@@ -215,9 +229,19 @@ class ShareImportActivity : AppCompatActivity() {
                     markDone(row)
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: LegResolver.NotResolved) {
                     failed++
-                    row.state.text = "✕ ${e.message ?: "Fehler"} – tippe „Von Hand“"
+                    row.state.text = "✕ ${e.message} – tippe „Von Hand“"
+                } catch (e: Exception) {
+                    // Kein Internet: wenigstens Ein- und Ausstieg aus dem Text übernehmen
+                    val leg = offlineLeg(row.leg)
+                    if (leg != null) {
+                        store.addLeg(journeyId, leg)
+                        markDone(row, "✓ ohne Internet übernommen (nur Halte aus dem Text)")
+                    } else {
+                        failed++
+                        row.state.text = "✕ ${e.message ?: "Keine Verbindung"} – tippe „Von Hand“"
+                    }
                 }
             }
             setLoading(false)
@@ -243,12 +267,20 @@ class ShareImportActivity : AppCompatActivity() {
         cont.invokeOnCancellation { dialog.dismiss() }
     }
 
-    private fun markDone(row: Row) {
+    private suspend fun offlineLeg(p: ParsedLeg): Leg? = withContext(Dispatchers.Default) {
+        try {
+            LegResolver.fromText(p, date, StationDb.get(this@ShareImportActivity))
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun markDone(row: Row, message: String = "✓ hinzugefügt") {
         row.done = true
         row.check.isEnabled = false
         row.manual.isEnabled = false
         row.state.visibility = View.VISIBLE
-        row.state.text = "✓ hinzugefügt"
+        row.state.text = message
     }
 
     private fun openManual(row: Row?) {

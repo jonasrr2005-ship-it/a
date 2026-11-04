@@ -61,8 +61,24 @@ auf eine OpenStreetMap-Karte.
 4. Für einen Umstieg einfach den nächsten Zug hinzufügen – Bahnhof, Datum und
    Uhrzeit sind dann schon mit der letzten Ankunft vorausgefüllt.
 
+## Teilen / Importieren (z. B. aus dem DB Navigator)
+
+- In einer anderen App (DB Navigator, Galerie, Screenshot …) auf **„Teilen“** tippen und
+  **„Zugreise“** wählen – Text **oder Bild** geht. Alternativ in der App **„Importieren“**
+  (Screenshot wählen oder Text aus der Zwischenablage).
+- Die App erkennt die Züge, Zeiten und Bahnhöfe (Bilder per Texterkennung auf dem Gerät)
+  und zeigt sie als Liste mit Häkchen – man übernimmt nur die gewünschten Abschnitte und
+  kann später jederzeit weitere Züge hinzufügen.
+- **Stehen die Zwischenhalte im geteilten Text, wird der Abschnitt ohne Internet übernommen:**
+  Halte und Zeiten aus dem Text, Koordinaten aus der eingebauten Bahnhofsliste. Sonst sucht
+  die App den Zug im Fahrplan (mit allen Halten und dem Gleisverlauf).
+- Nicht Erkanntes lässt sich „Von Hand“ ergänzen (Angaben sind vorausgefüllt), und der
+  erkannte Text kann korrigiert und neu ausgewertet werden.
+
 ## Funktionen
 
+- Schalter **„Nur Züge“**: Bahnhöfe mit Zügen (🚆) stehen in der Suche oben, Busse/Trams
+  werden ausgeblendet.
 - Karte mit jedem Zug in eigener Farbe, Einstieg/Ausstieg als große, Zwischenhalte als
   kleine Punkte; Antippen zeigt Name, An-/Abfahrt, Gleis und Verspätung.
 - Liste der Züge mit Datum, Abfahrt/Ankunft, Gleis, Fahrzeit, km, Anzahl Zwischenhalte
@@ -75,6 +91,10 @@ auf eine OpenStreetMap-Karte.
 Fahrplan, Halte und Streckenverlauf kommen von [Transitous](https://transitous.org)
 (freier MOTIS-Fahrplandienst, enthält u. a. DB, ÖBB, SBB und viele Verbünde in Europa).
 Kein API-Schlüssel nötig.
+
+Die eingebaute Bahnhofsliste (für den Import ohne Internet) stammt aus
+[trainline-eu/stations](https://github.com/trainline-eu/stations) und steht unter der
+Open Database License (ODbL).
 
 ## Bauen
 

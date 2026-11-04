@@ -41,19 +41,9 @@ object LegResolver {
         geometry = Geo.cut(trip.geometry, trip.stops.map { it.position }, from, to),
     )
 
-    /** Vereinheitlicht Bahnhofsnamen für den Vergleich ("Hamburg Hauptbahnhof" == "Hamburg Hbf"). */
-    fun normalizeStation(s: String): String = s.lowercase()
-        .replace("hauptbahnhof", "hbf")
-        .replace("bahnhof", "bf")
-        .replace(Regex("""\(.*?\)"""), "")
-        .replace(Regex("[^a-z0-9äöüß]"), "")
+    fun normalizeStation(s: String) = StationNames.normalize(s)
 
-    fun sameStation(a: String, b: String): Boolean {
-        val x = normalizeStation(a)
-        val y = normalizeStation(b)
-        if (x.isEmpty() || y.isEmpty()) return false
-        return x == y || (minOf(x.length, y.length) >= 4 && (x.startsWith(y) || y.startsWith(x)))
-    }
+    fun sameStation(a: String, b: String) = StationNames.same(a, b)
 
     private fun hhmm(s: String?, tz: String?) = Times.time(s, tz)
 
@@ -81,7 +71,7 @@ object LegResolver {
         val from = p.fromStation ?: throw NotResolved("Einstiegsbahnhof nicht erkannt")
         val depTime = p.departure ?: throw NotResolved("Abfahrtszeit nicht erkannt")
         val wanted = LocalDateTime.of(date.plusDays(p.dayOffset.toLong()), depTime).atZone(zone).toInstant()
-        val stations = TransitApi.searchStations(from).take(4)
+        val stations = TransitApi.searchStations(from, trainsOnly = true).take(4)
         if (stations.isEmpty()) throw NotResolved("Bahnhof „$from“ nicht gefunden")
 
         var best: Pair<Departure, Long>? = null
@@ -112,5 +102,47 @@ object LegResolver {
         if (board >= trip.stops.lastIndex) throw NotResolved("${dep.name} endet in $from")
         val alight = alightIndex(trip.stops, board, p.toStation, p.arrival)
         return Match(trip, dep, board, alight)
+    }
+
+    /**
+     * Baut den Abschnitt nur aus dem geteilten Text, ohne Internet: Halte und Zeiten aus dem
+     * Text, Koordinaten aus der eingebauten Bahnhofsliste. Die Linie verläuft von Halt zu Halt.
+     * Gibt null zurück, wenn ein Halt nicht in der Liste steht.
+     */
+    fun fromText(p: ParsedLeg, date: LocalDate, db: StationDb, zone: ZoneId = ZoneId.systemDefault()): Leg? {
+        if (p.stops.size < 2) return null
+        var day = date.plusDays(p.dayOffset.toLong())
+        var lastTime: java.time.LocalTime? = null
+        var near: LatLon? = null
+        val stops = ArrayList<Stop>()
+        for (ps in p.stops) {
+            val found = db.find(ps.name, near) ?: return null
+            // Plausibel? Nächster Halt mehr als 400 km entfernt -> wohl falscher Bahnhof
+            if (near != null && Geo.distance(near, found.position) > 400_000) return null
+            near = found.position
+            fun iso(t: java.time.LocalTime?): String? {
+                if (t == null) return null
+                if (lastTime != null && t.isBefore(lastTime!!.minusHours(3))) day = day.plusDays(1)
+                lastTime = t
+                return LocalDateTime.of(day, t).atZone(zone).toInstant().toString()
+            }
+            val arr = iso(ps.arrival)
+            val dep = iso(ps.departure)
+            stops += Stop(
+                name = ps.name, stopId = null, lat = found.lat, lon = found.lon, tz = zone.id,
+                scheduledArrival = arr, arrival = arr, scheduledDeparture = dep, departure = dep,
+                track = null, cancelled = false,
+            )
+        }
+        return Leg(
+            id = UUID.randomUUID().toString(),
+            tripId = "",
+            name = p.train ?: "Zug",
+            headsign = stops.last().name,
+            operator = null,
+            mode = null,
+            stops = stops,
+            geometry = stops.map { it.position },
+        )
     }
 }

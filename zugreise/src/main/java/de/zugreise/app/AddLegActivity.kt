@@ -131,7 +131,7 @@ class AddLegActivity : AppCompatActivity() {
                 suggestJob = lifecycleScope.launch {
                     delay(350)
                     try {
-                        val found = TransitApi.searchStations(text)
+                        val found = TransitApi.searchStations(text, binding.trainsOnly.isChecked)
                         suggestions.setStations(found)
                         if (found.isNotEmpty() && station == null && binding.station.hasFocus()) binding.station.showDropDown()
                     } catch (e: CancellationException) {
@@ -213,7 +213,7 @@ class AddLegActivity : AppCompatActivity() {
             }
             // Nutzer hat keinen Vorschlag angetippt: besten Treffer nehmen
             runSearch {
-                val found = TransitApi.searchStations(typed)
+                val found = TransitApi.searchStations(typed, binding.trainsOnly.isChecked)
                 val best = (if (binding.trainsOnly.isChecked) found.firstOrNull { it.hasTrains == true } else null)
                     ?: found.firstOrNull() ?: run {
                     showStatus("Kein Bahnhof „$typed“ gefunden.")

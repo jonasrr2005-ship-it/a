@@ -4,6 +4,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /** Ein aus Text (z. B. DB Navigator „Teilen“ oder Bilderkennung) erkannter Zugabschnitt. */
+data class ParsedStop(val name: String, val arrival: LocalTime?, val departure: LocalTime?)
+
 data class ParsedLeg(
     val train: String?,
     val fromStation: String?,
@@ -12,7 +14,12 @@ data class ParsedLeg(
     val arrival: LocalTime?,
     /** Tage nach dem erkannten Reisedatum (bei Fahrten über Mitternacht). */
     val dayOffset: Int = 0,
+    /** Alle im Text gefundenen Halte (Einstieg, Zwischenhalte, Ausstieg). */
+    val stops: List<ParsedStop> = emptyList(),
 ) {
+    /** Stehen Zwischenhalte im Text? Dann kann der Abschnitt ohne Internet übernommen werden. */
+    val hasIntermediateStops get() = stops.size >= 3
+
     fun label(): String {
         val dep = listOfNotNull(departure?.let { fmt(it) }, fromStation).joinToString(" ")
         val arr = listOfNotNull(arrival?.let { fmt(it) }, toStation).joinToString(" ")
@@ -32,7 +39,7 @@ data class ParsedJourney(val date: LocalDate?, val legs: List<ParsedLeg>)
 object ShareParser {
 
     private val TIME = Regex("""(?<![\d:])([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d:])(?:\s*Uhr)?""")
-    private val TIME_LINE = Regex("""^(?:(ab|an|dep|arr)\.?\s+)?([01]?\d|2[0-3]):([0-5]\d)(?:\s*Uhr)?(?:\s*[-–]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?\s*[,:|·]?\s*(.*)$""", RegexOption.IGNORE_CASE)
+    private val TIME_LINE = Regex("""^(?:(ab|an|dep|arr)\.?\s+)?([01]?\d|2[0-3]):([0-5]\d)(?:\s*Uhr)?(?:\s*[-–/]?\s*(?:ab\s+)?([01]?\d|2[0-3]):([0-5]\d)(?:\s*Uhr)?)?\s*[,:|·]?\s*(.*)$""", RegexOption.IGNORE_CASE)
     private val AB_AN_PREFIX = Regex("""^(ab|an)\s+""", RegexOption.IGNORE_CASE)
 
     private val KNOWN_PRODUCTS = listOf(
@@ -73,7 +80,11 @@ object ShareParser {
 
         val date = findDate(lines, today)
 
-        data class Entry(val index: Int, val time: LocalTime, val station: String, val kind: String?)
+        /** [time] = Ankunft bzw. einzige Zeit, [time2] = Abfahrt bei Zwischenhalten ("10:54 10:56 Augsburg"). */
+        data class Entry(val index: Int, val time: LocalTime, val time2: LocalTime?, val station: String, val kind: String?) {
+            val dep get() = time2 ?: time
+            fun toStop() = ParsedStop(station, time, dep)
+        }
         data class TrainAt(val index: Int, val name: String)
 
         val entries = mutableListOf<Entry>()
@@ -82,24 +93,24 @@ object ShareParser {
 
         for ((i, line) in lines.withIndex()) {
             if (i in usedAsStation) continue
-            findTrain(line)?.let { name ->
-                // Zeile wie "ICE 578 → Hamburg" ist eine Zuginfo, keine Uhrzeit-Zeile
-                if (TIME_LINE.find(line) == null) {
-                    trains += TrainAt(i, name)
-                    return@let
-                }
+            val timeMatch = TIME_LINE.matchEntire(line)
+            if (timeMatch == null) {
+                findTrain(line)?.let { trains += TrainAt(i, it) }
+                continue
             }
-            val m = TIME_LINE.matchEntire(line) ?: continue
+            val m = timeMatch
             val kind = m.groupValues[1].lowercase().let { if (it == "dep") "ab" else if (it == "arr") "an" else it }.ifEmpty { null }
             val time = LocalTime.of(m.groupValues[2].toInt(), m.groupValues[3].toInt())
-            var rest = cleanStation(m.groupValues[4])
+            val time2 = m.groupValues[4].takeIf { it.isNotEmpty() }?.let { LocalTime.of(it.toInt(), m.groupValues[5].toInt()) }
+            val restRaw = m.groupValues[6]
+            var rest = cleanStation(restRaw)
             // Zug in derselben Zeile (z. B. "10:24 ICE 578 München Hbf")
-            findTrain(m.groupValues[4])?.let { name ->
-                if (trains.none { it.index == i }) trains += TrainAt(i, name)
-                rest = cleanStation(m.groupValues[4].replace(TRAIN, ""))
+            findTrain(restRaw)?.let { name ->
+                trains += TrainAt(i, name)
+                rest = cleanStation(restRaw.replace(TRAIN, ""))
             }
             // Zeitspanne ohne Bahnhof (z. B. "10:24 - 14:31") ist eine Zusammenfassung
-            if (rest.isEmpty() && m.groupValues[0].contains(Regex("""\d\s*[-–]\s*\d"""))) continue
+            if (rest.isEmpty() && time2 != null) continue
             if (rest.isEmpty() || !looksLikeStation(rest)) {
                 // Bahnhof steht in einer der nächsten Zeilen
                 rest = ""
@@ -114,45 +125,73 @@ object ShareParser {
                     }
                 }
             }
-            if (rest.isNotEmpty()) entries += Entry(i, time, rest, kind)
+            if (rest.isNotEmpty()) entries += Entry(i, time, time2, rest, kind)
         }
 
-        // Züge an derselben Position wie eine Zeit sollen hinter dieser Zeit einsortiert werden
+        fun legOf(train: String?, segment: List<Entry>): ParsedLeg? {
+            if (segment.isEmpty()) return if (train != null) ParsedLeg(train, null, null, null, null) else null
+            val first = segment.first()
+            val last = segment.last().takeIf { segment.size >= 2 }
+            return ParsedLeg(
+                train = train,
+                fromStation = first.station,
+                departure = first.dep,
+                toStation = last?.station,
+                arrival = last?.time,
+                stops = if (segment.size >= 2)
+                    segment.mapIndexed { k, e ->
+                        when (k) {
+                            0 -> ParsedStop(e.station, null, e.dep)
+                            segment.lastIndex -> ParsedStop(e.station, e.time, null)
+                            else -> e.toStop()
+                        }
+                    }
+                else emptyList(),
+            )
+        }
+
         val legs = mutableListOf<ParsedLeg>()
         if (trains.isEmpty()) {
-            // Nur Zeiten + Bahnhöfe: paarweise Abfahrt/Ankunft
-            entries.chunked(2).filter { it.size == 2 }.forEach { (a, b) ->
-                legs += ParsedLeg(null, a.station, a.time, b.station, b.time)
+            // Keine Zugnamen: Abschnitte dort trennen, wo derselbe Bahnhof zweimal hintereinander
+            // steht (Ankunft + Abfahrt beim Umstieg).
+            var current = mutableListOf<Entry>()
+            for (e in entries) {
+                val prev = current.lastOrNull()
+                if (prev != null && StationNames.same(prev.station, e.station)) {
+                    legOf(null, current)?.let { legs += it }
+                    current = mutableListOf()
+                }
+                current += e
             }
+            legOf(null, current)?.let { if (it.toStation != null) legs += it }
         } else {
-            val firstTrain = trains.first().index
-            val stopsBeforeFirst = entries.count { it.index < firstTrain }
-            // Darstellung A: Abfahrt steht vor dem Zug, Ankunft danach (wie in der Reiseübersicht).
-            // Darstellung B: Zug zuerst, danach Abfahrt und Ankunft.
+            val stopsBeforeFirst = entries.count { it.index < trains.first().index }
+            // Darstellung A: Abfahrt steht vor dem Zug, Zwischenhalte und Ankunft danach.
+            // Darstellung B: Zug zuerst, danach Abfahrt, Zwischenhalte und Ankunft.
             val trainFirst = stopsBeforeFirst == 0
             for ((t, train) in trains.withIndex()) {
                 val prev = trains.getOrNull(t - 1)?.index ?: -1
-                val next = trains.getOrNull(t + 1)?.index ?: Int.MAX_VALUE
+                val next = trains.getOrNull(t + 1)
+                val nextIndex = next?.index ?: Int.MAX_VALUE
                 val before = entries.filter { it.index in (prev + 1) until train.index }
                 val sameLine = entries.filter { it.index == train.index }
-                val after = entries.filter { it.index > train.index && it.index < next }
-                val dep: Entry?
-                val arr: Entry?
-                if (sameLine.isNotEmpty()) {
-                    dep = sameLine.first()
-                    arr = after.firstOrNull { it.kind != "ab" } ?: after.firstOrNull()
-                } else if (trainFirst) {
-                    dep = after.firstOrNull { it.kind == "ab" } ?: after.getOrNull(0)
-                    arr = after.firstOrNull { it.kind == "an" } ?: after.getOrNull(1)
-                } else {
-                    dep = before.lastOrNull { it.kind == "ab" } ?: before.lastOrNull()
-                    arr = after.firstOrNull { it.kind == "an" } ?: after.firstOrNull()
+                var after = entries.filter { it.index > train.index && it.index < nextIndex }
+                val segment: List<Entry> = when {
+                    sameLine.isNotEmpty() -> sameLine + after
+                    trainFirst -> {
+                        val a = after.indexOfFirst { it.kind == "ab" }.takeIf { it >= 0 } ?: 0
+                        val b = after.indexOfLast { it.kind == "an" }.takeIf { it >= 0 } ?: after.lastIndex
+                        if (after.isEmpty() || b < a) after else after.subList(a, b + 1)
+                    }
+                    else -> {
+                        // Der letzte Eintrag vor dem nächsten Zug ist dessen Abfahrt
+                        val nextHasOwnDeparture = next != null && entries.none { it.index == next.index }
+                        if (nextHasOwnDeparture && after.size >= 2) after = after.dropLast(1)
+                        val dep = before.lastOrNull { it.kind == "ab" } ?: before.lastOrNull()
+                        listOfNotNull(dep) + after
+                    }
                 }
-                if (dep == null && arr == null) {
-                    legs += ParsedLeg(train.name, null, null, null, null)
-                } else {
-                    legs += ParsedLeg(train.name, dep?.station, dep?.time, arr?.station, arr?.time)
-                }
+                legOf(train.name, segment)?.let { legs += it }
             }
         }
         return ParsedJourney(date, withDayOffsets(legs))

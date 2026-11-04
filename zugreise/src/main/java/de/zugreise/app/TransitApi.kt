@@ -74,25 +74,45 @@ object TransitApi {
 
     // ---------------- öffentliche Aufrufe ----------------
 
-    suspend fun searchStations(text: String): List<Station> = withContext(Dispatchers.IO) {
-        val body = get("/api/v1/geocode", mapOf("text" to text, "type" to "STOP", "language" to "de"))
-        val a = JSONArray(body)
-        List(a.length()) { a.getJSONObject(it) }
+    /**
+     * Bahnhofssuche. Mit [trainsOnly] werden zusätzlich gezielt Halte mit Zügen gesucht und
+     * vorne einsortiert – die normale Suche liefert sonst manchmal nur Bushaltestellen
+     * (z. B. bei „Rheda-Wiedenbrück“).
+     */
+    suspend fun searchStations(text: String, trainsOnly: Boolean = false): List<Station> = withContext(Dispatchers.IO) {
+        val rail = if (trainsOnly) {
+            try {
+                geocode(text, RAIL_MODES.filter { it != "RAIL" && it != "REGIONAL_FAST_RAIL" }.joinToString(","))
+                    .map { it.copy(hasTrains = true) }
+            } catch (e: IOException) {
+                emptyList()
+            }
+        } else emptyList()
+        val general = geocode(text, null)
+        (rail + general)
+            .distinctBy { it.id }
+            .distinctBy { it.toString() }
+            // Bahnhöfe mit Zügen zuerst, die Reihenfolge der API sonst beibehalten
+            .sortedBy { if (it.hasTrains == true) 0 else if (it.hasTrains == null) 1 else 2 }
+    }
+
+    private fun geocode(text: String, modes: String?): List<Station> {
+        val params = mutableMapOf("text" to text, "type" to "STOP", "language" to "de")
+        if (modes != null) params["mode"] = modes
+        val a = JSONArray(get("/api/v1/geocode", params))
+        return List(a.length()) { a.getJSONObject(it) }
             .filter { it.str("id") != null }
             .map { o ->
                 val area = o.optJSONArray("areas")?.let { areas ->
                     (0 until areas.length()).map { areas.getJSONObject(it) }
                         .firstOrNull { it.optBoolean("default") }?.str("name")
                 }
-                val modes = o.optJSONArray("modes")?.let { m -> List(m.length()) { m.optString(it) } }
+                val modeList = o.optJSONArray("modes")?.let { m -> List(m.length()) { m.optString(it) } }
                 Station(
                     o.getString("id"), o.str("name") ?: "?", o.optDouble("lat"), o.optDouble("lon"), area,
-                    hasTrains = modes?.let { m -> m.any { it in RAIL_MODES } },
+                    hasTrains = modeList?.let { m -> m.any { it in RAIL_MODES } },
                 )
             }
-            .distinctBy { it.toString() }
-            // Bahnhöfe mit Zügen zuerst, die Reihenfolge der API sonst beibehalten
-            .sortedBy { if (it.hasTrains == true) 0 else if (it.hasTrains == null) 1 else 2 }
     }
 
     val RAIL_MODES = setOf(
