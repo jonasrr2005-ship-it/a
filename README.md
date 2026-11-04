@@ -41,3 +41,45 @@ Die Wahl wird gespeichert.
 ```
 
 GitHub Actions baut bei jedem Push die APK (Artifact `standort-tracker-apk`).
+
+---
+
+# Zugreise (Android) – Modul `zugreise/`
+
+Zweite, eigenständige App im selben Repository. Man trägt ein, **welche Züge man
+wann nimmt** (auch mehrere hintereinander mit Umstiegen), und die App sucht den
+**kompletten Laufweg mit allen Zwischenhalten** aus dem Internet und zeichnet ihn
+auf eine OpenStreetMap-Karte.
+
+## Bedienung
+
+1. **„+ Zug hinzufügen“** → Einstiegsbahnhof eintippen (Vorschläge erscheinen),
+   **Datum** und ungefähre **Uhrzeit** wählen, optional die **Zugnummer**
+   (z. B. `ICE 578`, `RE 4`, `S 8`).
+2. **„Abfahrten suchen“** → Liste der Abfahrten; den eigenen Zug antippen.
+3. Die App lädt den Laufweg und fragt **„Wo steigst du aus?“** → Halt antippen.
+4. Für einen Umstieg einfach den nächsten Zug hinzufügen – Bahnhof, Datum und
+   Uhrzeit sind dann schon mit der letzten Ankunft vorausgefüllt.
+
+## Funktionen
+
+- Karte mit jedem Zug in eigener Farbe, Einstieg/Ausstieg als große, Zwischenhalte als
+  kleine Punkte; Antippen zeigt Name, An-/Abfahrt, Gleis und Verspätung.
+- Liste der Züge mit Datum, Abfahrt/Ankunft, Gleis, Fahrzeit, km, Anzahl Zwischenhalte
+  und Umstiegszeit. Antippen → alle Halte; lange drücken → löschen.
+- Mehrere **Reisen** (z. B. „Urlaub Italien“) anlegen, umbenennen, löschen.
+- Alles wird auf dem Gerät gespeichert; einmal geladene Strecken gehen auch offline.
+
+## Datenquelle
+
+Fahrplan, Halte und Streckenverlauf kommen von [Transitous](https://transitous.org)
+(freier MOTIS-Fahrplandienst, enthält u. a. DB, ÖBB, SBB und viele Verbünde in Europa).
+Kein API-Schlüssel nötig.
+
+## Bauen
+
+```bash
+./gradlew :zugreise:assembleDebug   # zugreise/build/outputs/apk/debug/zugreise-debug.apk
+```
+
+GitHub Actions baut bei jedem Push auch diese APK (Artifact `zugreise-apk`).
