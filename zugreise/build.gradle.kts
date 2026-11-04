@@ -11,8 +11,8 @@ android {
         applicationId = "de.zugreise.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.3.1"
     }
 
     // Fester Signaturschlüssel, damit neue APKs als Update installiert werden können.

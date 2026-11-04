@@ -76,8 +76,11 @@ object LegResolver {
 
         var best: Pair<Departure, Long>? = null
         for (station in stations) {
+            // Erst nur Züge (inkl. naher Bahnsteige), dann alles – manche Bahnhöfe sind in der
+            // Suche nur als Bushaltestelle eingetragen.
             val deps = try {
-                TransitApi.departures(station.id, wanted.minus(Duration.ofMinutes(20)), windowHours = 2)
+                TransitApi.departures(station.id, wanted.minus(Duration.ofMinutes(20)), 2, trainsOnly = true)
+                    .ifEmpty { TransitApi.departures(station.id, wanted.minus(Duration.ofMinutes(20)), 2) }
             } catch (e: IOException) {
                 continue
             }

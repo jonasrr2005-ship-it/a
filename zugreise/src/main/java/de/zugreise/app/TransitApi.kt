@@ -89,11 +89,14 @@ object TransitApi {
             }
         } else emptyList()
         val general = geocode(text, null)
+        // Passt der Name zur Eingabe? (verhindert, dass bei "Rahden" z. B. "Raheny (Dublin)" oben steht)
+        val firstWord = StationNames.normalize(text.trim().split(Regex("[\\s,]+")).first())
+        fun relevant(s: Station) = firstWord.isEmpty() || StationNames.normalize(s.name).contains(firstWord)
         (rail + general)
             .distinctBy { it.id }
             .distinctBy { it.toString() }
-            // Bahnhöfe mit Zügen zuerst, die Reihenfolge der API sonst beibehalten
-            .sortedBy { if (it.hasTrains == true) 0 else if (it.hasTrains == null) 1 else 2 }
+            // Passende Namen zuerst, darin Bahnhöfe mit Zügen zuerst, sonst Reihenfolge der API
+            .sortedWith(compareBy({ !relevant(it) }, { if (it.hasTrains == true) 0 else if (it.hasTrains == null) 1 else 2 }))
     }
 
     private fun geocode(text: String, modes: String?): List<Station> {
