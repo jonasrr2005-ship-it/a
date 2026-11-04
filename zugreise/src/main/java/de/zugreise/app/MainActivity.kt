@@ -53,6 +53,20 @@ class MainActivity : AppCompatActivity() {
         binding.journeyName.setOnClickListener { renameJourney() }
 
         refresh(zoom = true)
+        showLastCrash()
+    }
+
+    private fun showLastCrash() {
+        val crash = ZugreiseApp.takeLastCrash(this) ?: return
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Die App ist zuletzt abgestürzt")
+            .setMessage("Bitte diese Meldung kopieren und weitergeben, damit der Fehler behoben werden kann:\n\n$crash")
+            .setPositiveButton("Kopieren") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Zugreise-Fehler", crash))
+            }
+            .setNegativeButton("Schließen", null)
+            .show()
     }
 
     override fun onResume() {

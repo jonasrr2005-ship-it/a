@@ -50,7 +50,7 @@ class AddLegActivity : AppCompatActivity() {
     private var suggestJob: Job? = null
     private var searchJob: Job? = null
     private var ignoreTextChange = false
-    private val suggestions = NoFilterAdapter(this)
+    private lateinit var suggestions: NoFilterAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +62,7 @@ class AddLegActivity : AppCompatActivity() {
             insets
         }
 
+        suggestions = NoFilterAdapter(this)
         store = JourneyStore(this)
         journeyId = intent.getStringExtra(EXTRA_JOURNEY) ?: store.current().id
         prefillFromPreviousLeg()
