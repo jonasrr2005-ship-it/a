@@ -44,14 +44,6 @@
                 android:text="@string/set_pin" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPins"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1" />
-
-            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMapType"
                 style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="0dp"

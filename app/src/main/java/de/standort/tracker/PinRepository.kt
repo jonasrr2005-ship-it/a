@@ -21,11 +21,14 @@ data class Pin(
     val address: String?,
     /** Was abgeliefert wurde. */
     val delivery: String,
-    /** Die Strecke, die beim Setzen des Pins aufgezeichnet wurde. */
+    /** Die Strecke, zu der der Pin gehört. */
     val trackId: Long?,
 )
 
-/** Speichert die Pins dauerhaft in `pins.json`, bis der Nutzer sie löscht. */
+/**
+ * Speichert die Pins dauerhaft in `pins.json`. Pins gehören immer zu einer Strecke
+ * und werden nur zusammen mit ihr gelöscht.
+ */
 object PinRepository {
 
     private val _pins = MutableStateFlow<List<Pin>>(emptyList())
@@ -57,10 +60,10 @@ object PinRepository {
     fun setDelivery(id: Long, delivery: String) = modify(id) { it.copy(delivery = delivery) }
 
     @Synchronized
-    fun delete(id: Long) = save(_pins.value.filterNot { it.id == id })
+    fun assignTrack(id: Long, trackId: Long) = modify(id) { it.copy(trackId = trackId) }
 
     @Synchronized
-    fun deleteAll() = save(emptyList())
+    fun deleteForTrack(trackId: Long) = save(_pins.value.filterNot { it.trackId == trackId })
 
     private fun modify(id: Long, change: (Pin) -> Pin) =
         save(_pins.value.map { if (it.id == id) change(it) else it })

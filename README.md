@@ -16,10 +16,12 @@ Die Wahl wird gespeichert.
 - Aufzeichnung läuft als Vordergrund-Dienst weiter – auch bei ausgeschaltetem Bildschirm
 - **Mehrere Strecken:** jede Aufnahme (Start → Stopp) ist eine eigene Strecke. Die Liste
   „Strecken“ zeigt Wochentag, Datum, Start-/Endzeit, Länge und Anzahl der Lieferungen;
-  jede Strecke lässt sich auf der Karte anzeigen oder löschen.
-- **Pin setzen (Lieferung):** speichert Datum mit Wochentag, Uhrzeit, Koordinaten,
-  Genauigkeit und die vollständige Adresse und fragt sofort „Was hast du abgeliefert?“.
-  Pins bleiben gespeichert (`pins.json`), bis sie einzeln oder alle gelöscht werden.
+  jede Strecke lässt sich mit ihren Pins auf der Karte anzeigen.
+- **Pin setzen (Lieferung):** nur während einer Aufzeichnung; der Pin gehört fest zu
+  dieser Strecke. Gespeichert werden Datum mit Wochentag, Uhrzeit, Koordinaten,
+  Genauigkeit und die vollständige Adresse; die App fragt sofort „Was hast du abgeliefert?“.
+- **Löschen:** nur ganze Strecken samt allen ihren Pins, nach einer Sicherheitsabfrage.
+  Einzelne Pins können nicht gelöscht werden.
   - Adresse: Android-Geocoder, ersatzweise OpenStreetMap Nominatim
   - Ohne Internet wird der Pin trotzdem gespeichert, die Adresse wird später nachgeladen.
 

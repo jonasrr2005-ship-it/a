@@ -71,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         TrackRepository.init(this)
         PinRepository.init(this)
+        TrackRepository.adoptOrphanPins()
         selectedTrackId = savedInstanceState?.getLong(STATE_TRACK, -1L)?.takeIf { it != -1L }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -96,24 +97,17 @@ class MainActivity : AppCompatActivity() {
             displayedTrack()?.points?.lastOrNull()?.let { map.moveTo(it, animate = true) }
         }
         binding.btnPin.setOnClickListener { withLocationPermission(::setPin) }
-        binding.btnPins.setOnClickListener { showPinList() }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch {
-                    combine(TrackRepository.tracks, TrackRepository.activeTrackId) { tracks, active ->
-                        tracks to active
-                    }.collect { (tracks, active) ->
-                        binding.btnTracks.text = getString(R.string.track_list, tracks.size)
-                        binding.btnToggle.setText(if (active != null) R.string.stop else R.string.start)
-                        showDisplayedTrack()
-                    }
-                }
-                launch {
-                    PinRepository.pins.collect { pins ->
-                        binding.btnPins.text = getString(R.string.pin_list, pins.size)
-                        if (mapReady) map.showPins(pins)
-                    }
+                combine(
+                    TrackRepository.tracks,
+                    TrackRepository.activeTrackId,
+                    PinRepository.pins
+                ) { tracks, active, _ -> tracks to active }.collect { (tracks, active) ->
+                    binding.btnTracks.text = getString(R.string.track_list, tracks.size)
+                    binding.btnToggle.setText(if (active != null) R.string.stop else R.string.start)
+                    showDisplayedTrack()
                 }
             }
         }
@@ -138,7 +132,6 @@ class MainActivity : AppCompatActivity() {
             mapReady = true
             displayedTrack()?.points?.lastOrNull()?.let { map.moveTo(it, animate = false) }
             showDisplayedTrack()
-            map.showPins(PinRepository.pins.value)
         }
     }
 
@@ -180,6 +173,8 @@ class MainActivity : AppCompatActivity() {
         if (!mapReady) return
         val points = track?.points.orEmpty()
         map.showTrack(points)
+        // Auf der Karte nur die Pins der angezeigten Strecke.
+        map.showPins(track?.let { PinRepository.forTrack(it.id) }.orEmpty())
         val last = points.lastOrNull()
         if (recording && last != null && followPosition) map.moveTo(last, animate = true)
     }
@@ -296,8 +291,12 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.track_delete_running, Toast.LENGTH_LONG).show()
                 } else {
                     MaterialAlertDialogBuilder(this)
-                        .setMessage(R.string.track_delete_question)
-                        .setPositiveButton(R.string.delete) { _, _ -> TrackRepository.delete(track.id) }
+                        .setTitle(formatDay(track.startTime))
+                        .setMessage(getString(R.string.track_delete_question, deliveries.size))
+                        .setPositiveButton(R.string.delete) { _, _ ->
+                            if (selectedTrackId == track.id) selectedTrackId = null
+                            TrackRepository.deleteWithPins(track.id)
+                        }
                         .setNegativeButton(R.string.cancel, null)
                         .show()
                 }
@@ -309,6 +308,15 @@ class MainActivity : AppCompatActivity() {
     // ---- Pins / Lieferungen ----
 
     private fun setPin() {
+        val trackId = TrackRepository.activeTrackId.value
+        if (trackId == null) {
+            MaterialAlertDialogBuilder(this)
+                .setMessage(R.string.pin_needs_recording)
+                .setPositiveButton(R.string.start) { _, _ -> startTracking() }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+            return
+        }
         lifecycleScope.launch {
             Toast.makeText(this@MainActivity, R.string.locating, Toast.LENGTH_SHORT).show()
             val location = currentLocation()
@@ -325,7 +333,7 @@ class MainActivity : AppCompatActivity() {
                 accuracyMeters = if (location.hasAccuracy()) location.accuracy else null,
                 address = null,
                 delivery = "",
-                trackId = TrackRepository.activeTrackId.value,
+                trackId = trackId,
             )
             // Sofort speichern, damit der Pin auch ohne Internet erhalten bleibt.
             PinRepository.add(pin)
@@ -348,7 +356,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Fragt, was abgeliefert wurde. Bei einem neuen Pin kann er auch verworfen werden. */
+    /** Fragt, was abgeliefert wurde. Ein neuer Pin muss gespeichert werden. */
     private fun askDelivery(id: Long, isNew: Boolean) {
         val pin = PinRepository.get(id) ?: return
         val padding = (20 * resources.displayMetrics.density).toInt()
@@ -364,7 +372,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(padding, padding / 2, padding, 0)
             addView(input)
         }
-        val dialog = MaterialAlertDialogBuilder(this)
+        val builder = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delivery_question)
             .setView(container)
             .setCancelable(!isNew)
@@ -372,10 +380,8 @@ class MainActivity : AppCompatActivity() {
                 PinRepository.setDelivery(id, input.text.toString().trim())
                 showPinDetails(id)
             }
-            .setNegativeButton(if (isNew) R.string.delivery_discard else R.string.cancel) { _, _ ->
-                if (isNew) PinRepository.delete(id)
-            }
-            .show()
+        if (!isNew) builder.setNegativeButton(R.string.cancel, null)
+        val dialog = builder.show()
         input.requestFocus()
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
     }
@@ -420,7 +426,6 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.pin_title)
             .setMessage(describe(pin))
             .setPositiveButton(R.string.close, null)
-            .setNegativeButton(R.string.delete) { _, _ -> confirmDeletePin(pin.id) }
             .setNeutralButton(R.string.edit) { _, _ -> askDelivery(pin.id, isNew = false) }
             .show()
     }
@@ -443,43 +448,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun addressText(pin: Pin): String = pin.address
         ?: getString(if (pin.id in addressLookups) R.string.pin_address_loading else R.string.pin_address_unknown)
-
-    private fun confirmDeletePin(id: Long) {
-        MaterialAlertDialogBuilder(this)
-            .setMessage(R.string.pin_delete_question)
-            .setPositiveButton(R.string.delete) { _, _ -> PinRepository.delete(id) }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun showPinList() {
-        val pins = PinRepository.pins.value.sortedByDescending { it.time }
-        val builder = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.pins_title)
-            .setPositiveButton(R.string.close, null)
-        if (pins.isEmpty()) {
-            builder.setMessage(R.string.pins_empty)
-        } else {
-            val labels = pins.map { pin ->
-                getString(
-                    R.string.pin_list_item,
-                    formatDay(pin.time),
-                    formatTime(pin.time),
-                    pin.delivery.ifBlank { getString(R.string.delivery_empty) },
-                    addressText(pin)
-                ) as CharSequence
-            }.toTypedArray()
-            builder.setItems(labels) { _, which -> showPinDetails(pins[which].id) }
-            builder.setNeutralButton(R.string.pins_delete_all) { _, _ ->
-                MaterialAlertDialogBuilder(this)
-                    .setMessage(R.string.pins_delete_all_question)
-                    .setPositiveButton(R.string.delete) { _, _ -> PinRepository.deleteAll() }
-                    .setNegativeButton(R.string.cancel, null)
-                    .show()
-            }
-        }
-        builder.show()
-    }
 
     /** z. B. „Mittwoch, 04.11.2026“ */
     private fun formatDay(time: Long): String =

@@ -83,7 +83,7 @@ object TrackRepository {
         val id = _activeTrackId.value ?: return
         _activeTrackId.value = null
         val track = get(id) ?: return
-        if (track.points.isEmpty()) {
+        if (track.points.isEmpty() && PinRepository.forTrack(id).isEmpty()) {
             delete(id)
             return
         }
@@ -98,12 +98,47 @@ object TrackRepository {
         pointsFile(id)?.appendText(String.format(Locale.US, "%.7f;%.7f;%d\n", lat, lon, time))
     }
 
+    /** Legt eine abgeschlossene Strecke ohne Punkte an (für Pins aus älteren Versionen). */
     @Synchronized
-    fun delete(id: Long) {
+    fun createFinished(start: Long, end: Long): Long {
+        val track = Track(start, start, end, emptyList(), null)
+        _tracks.value = _tracks.value + track
+        saveMeta()
+        return track.id
+    }
+
+    /** Löscht eine Strecke samt allen ihren Pins. */
+    @Synchronized
+    fun deleteWithPins(id: Long) {
+        PinRepository.deleteForTrack(id)
+        delete(id)
+    }
+
+    @Synchronized
+    private fun delete(id: Long) {
         if (_activeTrackId.value == id) _activeTrackId.value = null
         _tracks.value = _tracks.value.filterNot { it.id == id }
         pointsFile(id)?.delete()
         saveMeta()
+    }
+
+    /**
+     * Ordnet Pins ohne (noch vorhandene) Strecke einer passenden Strecke zu – für Daten
+     * aus älteren App-Versionen. Passt keine, bekommen sie eine eigene Strecke.
+     */
+    @Synchronized
+    fun adoptOrphanPins() {
+        val orphans = PinRepository.pins.value.filter { pin -> pin.trackId?.let { get(it) } == null }
+        if (orphans.isEmpty()) return
+        val leftover = mutableListOf<Pin>()
+        for (pin in orphans) {
+            val track = _tracks.value.firstOrNull { pin.time in it.startTime..it.displayEndTime }
+            if (track != null) PinRepository.assignTrack(pin.id, track.id) else leftover += pin
+        }
+        if (leftover.isNotEmpty()) {
+            val trackId = createFinished(leftover.minOf { it.time }, leftover.maxOf { it.time })
+            leftover.forEach { PinRepository.assignTrack(it.id, trackId) }
+        }
     }
 
     /** Gesamtlänge in Metern. */
@@ -120,7 +155,7 @@ object TrackRepository {
 
     private fun finishUnfinished() {
         for (track in _tracks.value.filter { it.endTime == null }) {
-            if (track.points.isEmpty()) delete(track.id)
+            if (track.points.isEmpty() && PinRepository.forTrack(track.id).isEmpty()) delete(track.id)
             else replace(track.copy(endTime = track.displayEndTime))
         }
     }

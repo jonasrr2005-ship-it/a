@@ -21,8 +21,8 @@ android {
         applicationId = "de.standort.tracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         buildConfigField("boolean", "HAS_MAPS_KEY", (mapsApiKey.isNotBlank()).toString())
     }

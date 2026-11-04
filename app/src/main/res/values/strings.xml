@@ -4,7 +4,6 @@
     <string name="stop">Aufzeichnung stoppen</string>
     <string name="center">Zentrieren</string>
     <string name="set_pin">📍 Pin setzen</string>
-    <string name="pin_list">Pins (%1$d)</string>
     <string name="track_list">Strecken (%1$d)</string>
     <string name="map_type_osm">🗺 Karte: OSM</string>
     <string name="map_type_google">🗺 Karte: Google</string>
@@ -38,7 +37,7 @@
     <string name="track_no_deliveries">Keine Lieferungen auf dieser Strecke.</string>
     <string name="track_delivery_line">• %1$s Uhr – %2$s\n   %3$s</string>
     <string name="track_show">Auf Karte zeigen</string>
-    <string name="track_delete_question">Diese Strecke löschen? Die Pins (Lieferungen) bleiben erhalten.</string>
+    <string name="track_delete_question">Diese Strecke mit allen %1$d Lieferungen (Pins) wirklich endgültig löschen? Das kann nicht rückgängig gemacht werden.</string>
     <string name="track_delete_running">Die laufende Strecke kann erst nach dem Stoppen gelöscht werden.</string>
 
     <!-- Pins / Lieferungen -->
@@ -46,7 +45,6 @@
     <string name="location_failed">Standort konnte nicht ermittelt werden. Bist du draußen?</string>
     <string name="delivery_question">Was hast du abgeliefert?</string>
     <string name="delivery_hint">z. B. 2 Pakete, 1 Brief …</string>
-    <string name="delivery_discard">Pin verwerfen</string>
     <string name="delivery_empty">(nichts eingetragen)</string>
     <string name="pin_title">Lieferung</string>
     <string name="pin_date">📅 %1$s</string>
@@ -57,10 +55,5 @@
     <string name="pin_address_unknown">nicht ermittelt (kein Internet?)</string>
     <string name="pin_coordinates">🌐 Koordinaten: %1$s</string>
     <string name="pin_accuracy">🎯 Genauigkeit: ± %1$d m</string>
-    <string name="pin_delete_question">Diesen Pin wirklich löschen?</string>
-    <string name="pins_empty">Noch keine Pins gesetzt.</string>
-    <string name="pins_title">Lieferungen</string>
-    <string name="pins_delete_all">Alle löschen</string>
-    <string name="pins_delete_all_question">Wirklich alle Pins löschen?</string>
-    <string name="pin_list_item">%1$s, %2$s Uhr\n📦 %3$s\n🏠 %4$s</string>
+    <string name="pin_needs_recording">Pins gehören immer zu einer Strecke. Soll jetzt eine Aufzeichnung gestartet werden?</string>
 </resources>
