@@ -13,7 +13,6 @@ include(FetchContent)
 FetchContent_Declare(
         llama
         URL https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_CPP_TAG}.tar.gz
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 # Nur die Bibliothek, keine Tools/Server/Tests.
