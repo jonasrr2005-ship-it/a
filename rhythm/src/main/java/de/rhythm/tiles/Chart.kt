@@ -90,36 +90,6 @@ object ChartGenerator {
         }
         return notes
     }
-
-    /**
-     * Macht aus selbst eingetippten Zeitpunkten Kacheln in zufälligen Spuren.
-     * Fast gleichzeitige Taps (mehrere Finger) werden zu Doppel-Kacheln, und eine Spur
-     * bleibt frei, solange darin noch eine Halte-Kachel läuft.
-     */
-    fun fromTaps(taps: List<Tap>, rnd: Random): List<Note> {
-        val notes = ArrayList<Note>()
-        val busyUntil = DoubleArray(LANES) { -9.0 }
-        val chordLanes = HashSet<Int>()
-        var lastLane = -1
-        var chordTime = -9.0
-        for (tap in taps.sortedBy { it.time }) {
-            val chord = tap.time - chordTime < 0.05
-            if (!chord) {
-                chordLanes.clear()
-                chordTime = tap.time
-            }
-            val free = (0 until LANES).filter { busyUntil[it] <= tap.time && it !in chordLanes }
-            if (free.isEmpty()) continue
-            val preferred = free.filter { it != lastLane }.ifEmpty { free }
-            val lane = preferred[rnd.nextInt(preferred.size)]
-            notes.add(Note(tap.time, lane, tap.duration))
-            // kleiner Abstand, damit sich zwei Kacheln in derselben Spur nicht überlappen
-            busyUntil[lane] = tap.time + tap.duration + 0.15
-            chordLanes.add(lane)
-            if (!chord) lastLane = lane
-        }
-        return notes
-    }
 }
 
 /** Ein selbst eingetippter Zeitpunkt; [duration] > 0 bei gehaltenem Finger (Halte-Kachel). */

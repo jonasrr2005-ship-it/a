@@ -32,7 +32,8 @@ class GameActivity : AppCompatActivity() {
 
     private enum class State { LOADING, LEAD_IN, PLAYING, PAUSED, RESUMING, FINISHED }
 
-    private lateinit var gameView: GameView
+    private lateinit var gameView: android.view.View
+    private lateinit var field: PlayField
     private lateinit var player: MediaPlayer
     private lateinit var songKey: String
     private lateinit var songTitle: String
@@ -63,7 +64,7 @@ class GameActivity : AppCompatActivity() {
         tapped = intent.getBooleanExtra(EXTRA_TAPPED, false)
         val notes = if (tapped) {
             val taps = TapStore.load(this, songKey) ?: return finish()
-            ChartGenerator.fromTaps(taps, kotlin.random.Random(System.nanoTime()))
+            taps.sortedBy { it.time }.map { Note(it.time, 0, it.duration) }
         } else {
             ChartStore.load(this, songKey, difficulty) ?: return finish()
         }
@@ -86,7 +87,12 @@ class GameActivity : AppCompatActivity() {
         }
         player.setOnCompletionListener { finishGame() }
 
-        gameView = GameView(this, notes, difficulty, player.duration / 1000.0, ::songTime)
+        // Eingetippte Songs: Kacheln an zufälligen Stellen, sonst klassisch in vier Spuren
+        if (tapped) {
+            SpotView(this, notes, difficulty, player.duration / 1000.0, ::songTime).also { gameView = it; field = it }
+        } else {
+            GameView(this, notes, difficulty, player.duration / 1000.0, ::songTime).also { gameView = it; field = it }
+        }
         setContentView(gameView)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -108,19 +114,19 @@ class GameActivity : AppCompatActivity() {
             State.RESUMING -> {
                 val left = (resumeAt - now) / 1e9
                 if (left > 0) {
-                    gameView.countdownText = (left + 1).toInt().toString()
+                    field.countdownText = (left + 1).toInt().toString()
                     return frozenTime
                 }
-                gameView.countdownText = null
+                field.countdownText = null
                 startPlayback(frozenTime)
             }
             State.LEAD_IN -> {
                 val t = -LEAD_IN + (now - clockAnchor) / 1e9
                 if (t < 0) {
-                    gameView.countdownText = if (t < -LEAD_IN + 1.5) songTitle.take(30).ifEmpty { null } else null
+                    field.countdownText = if (t < -LEAD_IN + 1.5) songTitle.take(30).ifEmpty { null } else null
                     return t
                 }
-                gameView.countdownText = null
+                field.countdownText = null
                 startPlayback(0.0)
             }
             State.PLAYING -> {}
@@ -159,8 +165,8 @@ class GameActivity : AppCompatActivity() {
             else -> {} // RESUMING: frozenTime ist bereits gesetzt
         }
         state = State.PAUSED
-        gameView.paused = true
-        gameView.countdownText = null
+        field.paused = true
+        field.countdownText = null
         gameView.invalidate()
         showPauseDialog()
     }
@@ -179,7 +185,7 @@ class GameActivity : AppCompatActivity() {
         if (state != State.PAUSED) return
         resumeAt = System.nanoTime() + 3_000_000_000L
         state = State.RESUMING
-        gameView.paused = false
+        field.paused = false
         gameView.invalidate()
     }
 
@@ -192,8 +198,8 @@ class GameActivity : AppCompatActivity() {
         if (state == State.FINISHED) return
         state = State.FINISHED
         frozenTime = player.duration / 1000.0
-        gameView.paused = true
-        val s = gameView.stats
+        field.paused = true
+        val s = field.stats
         val best = Scores.submit(this, songKey, tapped, difficulty, s.score)
         startActivity(
             Intent(this, ResultActivity::class.java)

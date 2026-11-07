@@ -46,8 +46,10 @@ Audiodatei auf dem Handy hast**.
 **Selbst eintippen** (Standard): Der Song läuft einmal durch, und du tippst irgendwo auf den
 Bildschirm, wann immer eine Kachel kommen soll. Finger länger halten ergibt eine lange
 Halte-Kachel, mehrere Finger gleichzeitig eine Doppel-Kachel. Mit „Letzte löschen“ lässt sich
-ein Fehltipp zurücknehmen. Danach startet das Spiel: Die Kacheln kommen genau zu deinen
-Zeitpunkten, aber **in zufälligen Spuren** – bei jedem Spielen neu ausgelost. Die Aufnahme wird
+ein Fehltipp zurücknehmen. Danach startet das Spiel: Die Kacheln tauchen genau zu deinen
+Zeitpunkten **an zufälligen Stellen auf dem Bildschirm** auf – bei jedem Spielen neu ausgelost.
+Ein Rahmen schrumpft auf die Kachel zu; wenn er sie erreicht, wird getippt. Lange Kacheln
+(„HALTEN“) bleiben gedrückt, bis sie sich gefüllt haben. Die Aufnahme wird
 gespeichert und kann jederzeit neu eingetippt werden.
 
 **Automatisch**: Die App erkennt die Beats des Songs (Spectral-Flux-Onset-Erkennung mit FFT)
@@ -85,8 +87,8 @@ GitHub Actions baut die APK bei jedem Push; Download unter „Artifacts“ als
 
 - `RecordActivity`/`RecordView`: Aufnahme der Taps mit Songzeit (Verarbeitungsverzögerung über
   den Zeitstempel des Touch-Ereignisses herausgerechnet)
-- `ChartGenerator.fromTaps`: verteilt die Taps zufällig auf die Spuren, nie zweimal hintereinander
-  dieselbe, und hält Spuren mit laufender Halte-Kachel frei
+- `SpotView`: Spielfläche des Eintipp-Modus; verteilt die Kacheln zufällig, ohne dass sich
+  gleichzeitig sichtbare überdecken, schnelle Folgen liegen nah beieinander
 - `AudioDecoder` + `BeatAnalyzer` + `ChartGenerator.generate`: automatischer Modus
 - `GameActivity`: `MediaPlayer` + eigene Uhr (`System.nanoTime`), die laufend an die
   Player-Position angeglichen wird; `GameView` zeichnet mit `Canvas` jedes Frame

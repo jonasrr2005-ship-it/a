@@ -8,7 +8,7 @@
     <string name="hard">Schwer</string>
     <string name="mode_tap">Selbst eintippen</string>
     <string name="mode_auto">Automatisch</string>
-    <string name="mode_tap_hint">Der Song läuft einmal, und du tippst überall hin, wenn eine Kachel kommen soll. Danach erscheinen die Kacheln genau zu deinen Zeitpunkten – in zufälligen Spuren. Der Schwierigkeitsgrad bestimmt hier nur das Tempo der Kacheln.</string>
+    <string name="mode_tap_hint">Der Song läuft einmal, und du tippst überall hin, wenn eine Kachel kommen soll. Danach erscheinen die Kacheln genau zu deinen Zeitpunkten an zufälligen Stellen auf dem Bildschirm – tippe drauf, wenn der Rahmen die Kachel erreicht. Der Schwierigkeitsgrad bestimmt hier nur, wie früh die Kacheln auftauchen.</string>
     <string name="mode_auto_hint">Die App erkennt die Beats des Songs und setzt die Kacheln selbst.</string>
     <string name="tap_exists_title">Eingetippte Kacheln vorhanden</string>
     <string name="tap_exists_text">Für „%1$s“ hast du schon %2$d Kacheln eingetippt.</string>
@@ -16,6 +16,7 @@
     <string name="record_again">Neu eintippen</string>
     <string name="record_hint">Tippe überall hin, wenn eine Kachel kommen soll.\nFinger länger halten = lange Kachel.\nMehrere Finger gleichzeitig = Doppel-Kachel.</string>
     <string name="record_count">Kacheln</string>
+    <string name="spot_hold">HALTEN</string>
     <string name="record_holding">Lange Kachel … %1$.1f s</string>
     <string name="record_undo">Letzte löschen</string>
     <string name="record_done">Fertig</string>

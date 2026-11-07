@@ -15,6 +15,13 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.random.Random
 
+/** Gemeinsame Schnittstelle der Spielflächen ([GameView] mit Spuren, [SpotView] mit zufälligen Stellen). */
+interface PlayField {
+    val stats: GameView.Stats
+    var countdownText: String?
+    var paused: Boolean
+}
+
 /**
  * Zeichnet die fallenden Kacheln und wertet die Berührungen aus.
  * Die Spielzeit (in Sekunden Songposition) liefert [clock].
@@ -26,7 +33,7 @@ class GameView(
     private val difficulty: Difficulty,
     private val songDuration: Double,
     private val clock: () -> Double,
-) : View(context) {
+) : View(context), PlayField {
 
     enum class Judgement(val label: String, val points: Int, val color: Int) {
         PERFECT("PERFEKT", 300, Color.rgb(120, 255, 240)),
@@ -50,7 +57,7 @@ class GameView(
             }
     }
 
-    val stats = Stats()
+    override val stats = Stats()
 
     private val laneColors = intArrayOf(
         Color.rgb(0, 229, 255), Color.rgb(255, 64, 200), Color.rgb(255, 214, 0), Color.rgb(100, 255, 140),
@@ -87,8 +94,8 @@ class GameView(
     private val particles = ArrayList<Particle>()
     private val rnd = Random(1)
 
-    var countdownText: String? = null
-    var paused = false
+    override var countdownText: String? = null
+    override var paused = false
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         hitY = h * 0.80f
