@@ -11,8 +11,8 @@ android {
         applicationId = "de.rhythm.tiles"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
@@ -38,4 +38,6 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // KI-Trennung der Instrumente (HT-Demucs als ONNX-Modell)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
 }

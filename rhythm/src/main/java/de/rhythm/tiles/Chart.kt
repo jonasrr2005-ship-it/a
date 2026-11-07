@@ -22,6 +22,21 @@ enum class Difficulty(
     HARD("Schwer", 0.16, 0.08, 1.05, true),
 }
 
+/**
+ * Wonach die Kacheln erzeugt werden. [stem] ist die Spur der KI-Trennung
+ * (Reihenfolge von HT-Demucs 6s), -1 = ganzer Song ohne Trennung.
+ */
+enum class Instrument(val label: String, val stem: Int, val melodic: Boolean) {
+    ALL("Rhythmus (alles)", -1, false),
+    PIANO("Klavier", 5, true),
+    VOCALS("Gesang", 3, true),
+    GUITAR("Gitarre", 4, true),
+    BASS("Bass", 1, true),
+    DRUMS("Schlagzeug", 0, false);
+
+    val needsAi get() = stem >= 0
+}
+
 class Note(val time: Double, val lane: Int, val duration: Double) {
     val end get() = time + duration
     val isHold get() = duration > 0.0
@@ -38,7 +53,7 @@ object ChartGenerator {
 
     const val LANES = 4
 
-    fun generate(onsets: List<BeatAnalyzer.Onset>, difficulty: Difficulty, seed: Long): List<Note> {
+    fun generate(onsets: List<BeatAnalyzer.Onset>, difficulty: Difficulty, melodic: Boolean, seed: Long): List<Note> {
         if (onsets.isEmpty()) return emptyList()
 
         // Schwache Onsets verwerfen
@@ -66,12 +81,19 @@ object ChartGenerator {
         val rnd = Random(seed)
         val notes = ArrayList<Note>()
         var lastLane = -1
+        var lastPitch = 0f
         for ((i, o) in chosen.withIndex()) {
             val prevGap = if (i > 0) o.time - chosen[i - 1].time else 9.0
             val nextGap = if (i + 1 < chosen.size) chosen[i + 1].time - o.time else 9.0
 
-            var lane = rnd.nextInt(LANES)
-            if (lane == lastLane) lane = (lane + 1 + rnd.nextInt(LANES - 1)) % LANES
+            val lane = if (melodic && lastLane >= 0 && o.pitch > 0f && lastPitch > 0f) {
+                melodicLane(lastLane, o.pitch - lastPitch, prevGap, rnd)
+            } else {
+                var l = rnd.nextInt(LANES)
+                if (l == lastLane) l = (l + 1 + rnd.nextInt(LANES - 1)) % LANES
+                l
+            }
+            if (o.pitch > 0f) lastPitch = o.pitch
 
             // Lange Pause bis zur nächsten Kachel → manchmal eine Halte-Kachel
             val duration = if (nextGap >= 0.85 && o.strength >= medianStrength && rnd.nextFloat() < 0.5f) {
@@ -90,12 +112,35 @@ object ChartGenerator {
         }
         return notes
     }
+
+    /**
+     * Folgt der Melodie wie auf einer Klaviatur: höherer Ton → weiter rechts,
+     * tieferer Ton → weiter links, großer Sprung → zwei Spuren weit.
+     */
+    private fun melodicLane(last: Int, semitones: Float, gap: Double, rnd: Random): Int {
+        val dir = when {
+            semitones > 0.5f -> 1
+            semitones < -0.5f -> -1
+            // Gleicher Ton: dieselbe Spur, außer bei sehr schnellen Wiederholungen
+            gap >= 0.3 -> 0
+            else -> if (rnd.nextBoolean()) 1 else -1
+        }
+        if (dir == 0) return last
+        val steps = if (kotlin.math.abs(semitones) > 4.5f) 2 else 1
+        var lane = last + dir * steps
+        if (lane !in 0 until LANES) {
+            // Am Rand angekommen: so weit wie möglich in die Richtung, sonst zur anderen Seite ausweichen
+            lane = lane.coerceIn(0, LANES - 1)
+            if (lane == last) lane = last - dir
+        }
+        return lane
+    }
 }
 
 /** Speichert erzeugte Kachelfolgen, damit ein Song nur einmal analysiert werden muss. */
 object ChartStore {
 
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun songKey(context: Context, uri: Uri): String {
         val size = runCatching {
@@ -107,11 +152,11 @@ object ChartStore {
         return digest.joinToString("") { "%02x".format(it) }.take(20)
     }
 
-    private fun file(context: Context, songKey: String, difficulty: Difficulty) =
-        File(File(context.filesDir, "charts").apply { mkdirs() }, "$songKey-${difficulty.name}-v$VERSION.txt")
+    private fun file(context: Context, songKey: String, instrument: Instrument, difficulty: Difficulty) =
+        File(File(context.filesDir, "charts").apply { mkdirs() }, "$songKey-${instrument.name}-${difficulty.name}-v$VERSION.txt")
 
-    fun load(context: Context, songKey: String, difficulty: Difficulty): List<Note>? {
-        val f = file(context, songKey, difficulty)
+    fun load(context: Context, songKey: String, instrument: Instrument, difficulty: Difficulty): List<Note>? {
+        val f = file(context, songKey, instrument, difficulty)
         if (!f.exists()) return null
         return runCatching {
             f.readLines().filter { it.isNotBlank() }.map { line ->
@@ -121,10 +166,25 @@ object ChartStore {
         }.getOrNull()
     }
 
-    fun save(context: Context, songKey: String, difficulty: Difficulty, notes: List<Note>) {
-        file(context, songKey, difficulty).writeText(
+    fun save(context: Context, songKey: String, instrument: Instrument, difficulty: Difficulty, notes: List<Note>) {
+        file(context, songKey, instrument, difficulty).writeText(
             notes.joinToString("\n") { "${it.time};${it.lane};${it.duration}" }
         )
+    }
+}
+
+/** Von der KI abgetrennte Instrumentenspuren (WAV), damit man im Spiel nur das Instrument hören kann. */
+object StemStore {
+
+    private const val KEEP = 5
+
+    fun file(context: Context, songKey: String, instrument: Instrument): File =
+        File(File(context.filesDir, "stems").apply { mkdirs() }, "$songKey-${instrument.name}.wav")
+
+    /** Nur die zuletzt erzeugten Spuren behalten – jede belegt ~10 MB pro Minute Musik. */
+    fun cleanup(context: Context) {
+        val files = File(context.filesDir, "stems").listFiles() ?: return
+        files.sortedByDescending { it.lastModified() }.drop(KEEP).forEach { it.delete() }
     }
 }
 
