@@ -16,17 +16,17 @@ object Scores {
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    // Rhythmus-Modus behält das alte Schlüsselformat, damit bisherige Rekorde erhalten bleiben
-    private fun key(songKey: String, instrument: Instrument, difficulty: Difficulty) =
-        if (instrument == Instrument.ALL) "$songKey|${difficulty.name}" else "$songKey|${instrument.name}|${difficulty.name}"
+    /** [tapped]: selbst eingetippte Kacheln statt automatisch erzeugter. */
+    private fun key(songKey: String, tapped: Boolean, difficulty: Difficulty) =
+        if (tapped) "$songKey|TAP|${difficulty.name}" else "$songKey|${difficulty.name}"
 
-    fun best(context: Context, songKey: String, instrument: Instrument, difficulty: Difficulty): Long =
-        prefs(context).getLong(key(songKey, instrument, difficulty), 0L)
+    fun best(context: Context, songKey: String, tapped: Boolean, difficulty: Difficulty): Long =
+        prefs(context).getLong(key(songKey, tapped, difficulty), 0L)
 
     /** Speichert den Punktestand, falls er ein neuer Rekord ist. Liefert den bisherigen Rekord. */
-    fun submit(context: Context, songKey: String, instrument: Instrument, difficulty: Difficulty, score: Long): Long {
-        val old = best(context, songKey, instrument, difficulty)
-        if (score > old) prefs(context).edit().putLong(key(songKey, instrument, difficulty), score).apply()
+    fun submit(context: Context, songKey: String, tapped: Boolean, difficulty: Difficulty, score: Long): Long {
+        val old = best(context, songKey, tapped, difficulty)
+        if (score > old) prefs(context).edit().putLong(key(songKey, tapped, difficulty), score).apply()
         return old
     }
 

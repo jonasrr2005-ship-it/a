@@ -23,9 +23,8 @@ class GameActivity : AppCompatActivity() {
         const val EXTRA_SONG_KEY = "song_key"
         const val EXTRA_TITLE = "title"
         const val EXTRA_DIFFICULTY = "difficulty"
-        const val EXTRA_INSTRUMENT = "instrument"
-        /** Optional: abgetrennte Instrumentenspur, die statt des Originals gespielt wird. */
-        const val EXTRA_AUDIO_FILE = "audio_file"
+        /** true: selbst eingetippte Kacheln spielen (Spuren werden jedes Mal neu ausgelost). */
+        const val EXTRA_TAPPED = "tapped"
 
         /** Vorlauf, damit die ersten Kacheln von oben hereinfallen können. */
         private const val LEAD_IN = 2.5
@@ -38,7 +37,7 @@ class GameActivity : AppCompatActivity() {
     private lateinit var songKey: String
     private lateinit var songTitle: String
     private lateinit var difficulty: Difficulty
-    private lateinit var instrument: Instrument
+    private var tapped = false
     private var state = State.LOADING
 
     // Uhr: Songzeit = base + (jetzt − anchor), sanft an die Player-Position angeglichen
@@ -61,9 +60,13 @@ class GameActivity : AppCompatActivity() {
         songKey = intent.getStringExtra(EXTRA_SONG_KEY) ?: return finish()
         songTitle = intent.getStringExtra(EXTRA_TITLE) ?: ""
         difficulty = Difficulty.valueOf(intent.getStringExtra(EXTRA_DIFFICULTY) ?: Difficulty.NORMAL.name)
-        instrument = Instrument.valueOf(intent.getStringExtra(EXTRA_INSTRUMENT) ?: Instrument.ALL.name)
-        val notes = ChartStore.load(this, songKey, instrument, difficulty) ?: return finish()
-        val audioFile = intent.getStringExtra(EXTRA_AUDIO_FILE)?.let { java.io.File(it) }?.takeIf { it.exists() }
+        tapped = intent.getBooleanExtra(EXTRA_TAPPED, false)
+        val notes = if (tapped) {
+            val taps = TapStore.load(this, songKey) ?: return finish()
+            ChartGenerator.fromTaps(taps, kotlin.random.Random(System.nanoTime()))
+        } else {
+            ChartStore.load(this, songKey, difficulty) ?: return finish()
+        }
 
         player = MediaPlayer()
         player.setAudioAttributes(
@@ -73,7 +76,7 @@ class GameActivity : AppCompatActivity() {
                 .build()
         )
         try {
-            if (audioFile != null) player.setDataSource(audioFile.path) else player.setDataSource(this, uri)
+            player.setDataSource(this, uri)
             player.prepare()
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_play, e.message), Toast.LENGTH_LONG).show()
@@ -191,7 +194,7 @@ class GameActivity : AppCompatActivity() {
         frozenTime = player.duration / 1000.0
         gameView.paused = true
         val s = gameView.stats
-        val best = Scores.submit(this, songKey, instrument, difficulty, s.score)
+        val best = Scores.submit(this, songKey, tapped, difficulty, s.score)
         startActivity(
             Intent(this, ResultActivity::class.java)
                 .setData(intent.data)
@@ -199,8 +202,7 @@ class GameActivity : AppCompatActivity() {
                 .putExtra(EXTRA_SONG_KEY, songKey)
                 .putExtra(EXTRA_TITLE, songTitle)
                 .putExtra(EXTRA_DIFFICULTY, difficulty.name)
-                .putExtra(EXTRA_INSTRUMENT, instrument.name)
-                .putExtra(EXTRA_AUDIO_FILE, intent.getStringExtra(EXTRA_AUDIO_FILE))
+                .putExtra(EXTRA_TAPPED, tapped)
                 .putExtra(ResultActivity.EXTRA_SCORE, s.score)
                 .putExtra(ResultActivity.EXTRA_BEST, best)
                 .putExtra(ResultActivity.EXTRA_ACCURACY, s.accuracy)

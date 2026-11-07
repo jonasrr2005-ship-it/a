@@ -39,49 +39,37 @@ unter „Artifacts“ als `standort-tracker-apk` herunterladbar.
 
 Ein Tipp-Spiel im Stil von „Magic Tiles“: Kacheln fallen in vier Spuren herunter
 und müssen im Takt der Musik angetippt werden – mit **jedem Song, den du als
-Audiodatei auf dem Handy hast**. Die Kacheln werden automatisch aus dem
-Rhythmus des Songs erzeugt.
+Audiodatei auf dem Handy hast**.
+
+## Zwei Arten, Kacheln zu bekommen
+
+**Selbst eintippen** (Standard): Der Song läuft einmal durch, und du tippst irgendwo auf den
+Bildschirm, wann immer eine Kachel kommen soll. Finger länger halten ergibt eine lange
+Halte-Kachel, mehrere Finger gleichzeitig eine Doppel-Kachel. Mit „Letzte löschen“ lässt sich
+ein Fehltipp zurücknehmen. Danach startet das Spiel: Die Kacheln kommen genau zu deinen
+Zeitpunkten, aber **in zufälligen Spuren** – bei jedem Spielen neu ausgelost. Die Aufnahme wird
+gespeichert und kann jederzeit neu eingetippt werden.
+
+**Automatisch**: Die App erkennt die Beats des Songs (Spectral-Flux-Onset-Erkennung mit FFT)
+und setzt die Kacheln selbst.
 
 ## Funktionen
 
 - Song aus dem Handy-Speicher wählen (MP3, M4A/AAC, OGG, Opus, FLAC, WAV …)
   oder aus Dateimanager/Musik-App per „Teilen“ / „Öffnen mit“ an die App schicken
-- **Instrument wählen**, dem die Kacheln folgen: Rhythmus (ganzer Song), Klavier, Gesang,
-  Gitarre, Bass oder Schlagzeug
-- **KI-Trennung der Instrumente direkt auf dem Handy** (HT-Demucs, 6 Spuren): Gesang und
-  alle anderen Instrumente werden herausgefiltert, die Kacheln entstehen nur aus z. B. dem Klavier.
-  Optional hört man im Spiel auch **nur das gewählte Instrument**
-- Bei Melodie-Instrumenten folgen die Kacheln der Tonhöhe: höherer Ton → weiter rechts
-- Automatische Noten-/Beat-Erkennung (Spectral-Flux-Onset-Erkennung mit FFT), Ergebnis wird
-  gespeichert – jeder Song wird nur einmal analysiert bzw. getrennt
-- Drei Schwierigkeitsgrade (Leicht / Normal / Schwer) mit unterschiedlicher
-  Kacheldichte und Fallgeschwindigkeit; auf „Schwer“ auch Doppel-Kacheln
-- Halte-Kacheln bei langen Tönen, Multitouch
+- Drei Schwierigkeitsgrade (Leicht / Normal / Schwer): Fallgeschwindigkeit, im
+  Automatik-Modus auch Kacheldichte und Doppel-Kacheln
+- Halte-Kacheln, Multitouch
 - Bewertung Perfekt / Super / OK / Verpasst, Combo-Multiplikator bis ×4
-- Ergebnis mit Note (S–D), Sternen, Genauigkeit und Rekord pro Song & Level
+- Ergebnis mit Note (S–D), Sternen, Genauigkeit und Rekord pro Song, Modus & Level
 - Liste der zuletzt gespielten Songs (lange drücken zum Entfernen), Pause mit Countdown
-
-## KI-Trennung
-
-Beim ersten Mal lädt die App das KI-Modell
-[HT-Demucs 6s als ONNX](https://huggingface.co/StemSplitio/htdemucs-6s-onnx) herunter
-(über 100 MB, MIT-Lizenz; Original von Meta Research, ONNX-Export von
-[StemSplit/demucs-onnx](https://github.com/StemSplit/demucs-onnx)). Danach läuft alles offline mit
-ONNX Runtime auf dem Handy. Die Trennung dauert je nach Gerät einige Minuten pro Song und braucht
-viel Arbeitsspeicher (aktuelles Mittelklasse-Handy oder besser empfohlen; maximal 12 Minuten pro
-Song). Alle sechs Spuren entstehen in einem Durchgang, danach kann man ohne Wartezeit zwischen den
-Instrumenten wechseln. Gespeichert wird als Audiodatei nur das gewählte Instrument (die
-letzten fünf Spuren werden behalten). Das Modell lässt sich durch langes Drücken auf die
-Modell-Zeile wieder löschen.
+- Kein Internet nötig
 
 ## YouTube / Spotify
 
 Die App spielt **lokale Audiodateien**. Direkt aus YouTube oder Spotify kann sie
 nicht abspielen: Spotify-Streams sind DRM-verschlüsselt, und das Herunterladen von
-YouTube-Audio verstößt gegen deren Nutzungsbedingungen. Funktioniert dagegen mit
-allem, was du als Datei hast – gekaufte Songs (z. B. Bandcamp, Amazon, iTunes-Downloads
-ohne DRM), eigene Aufnahmen, CDs, freie Musik (z. B. YouTube Audio Library, Free Music
-Archive, Jamendo).
+YouTube-Audio verstößt gegen deren Nutzungsbedingungen.
 
 ## Bauen
 
@@ -95,12 +83,10 @@ GitHub Actions baut die APK bei jedem Push; Download unter „Artifacts“ als
 
 ## Technik
 
-- `AudioDecoder`: dekodiert mit `MediaExtractor`/`MediaCodec` zu Mono-PCM (~11 kHz)
-- `BeatAnalyzer`: FFT (512 Punkte), logarithmischer Spectral Flux, adaptive Schwelle, Peak-Picking
-- `StemSeparator`: lädt das Modell, trennt in 7,8-s-Abschnitten mit ¼ Überlappung und
-  Dreiecks-Überblendung (wie Demucs), gibt fertige Samples sofort weiter (geringer Speicherbedarf)
-- `SongPreparer`: steuert Download, Trennung und Analyse im Hintergrund
-- `ChartGenerator`: wählt die stärksten Onsets mit Mindestabstand je Schwierigkeit,
-  verteilt sie auf Spuren, erzeugt Halte- und Doppel-Kacheln
+- `RecordActivity`/`RecordView`: Aufnahme der Taps mit Songzeit (Verarbeitungsverzögerung über
+  den Zeitstempel des Touch-Ereignisses herausgerechnet)
+- `ChartGenerator.fromTaps`: verteilt die Taps zufällig auf die Spuren, nie zweimal hintereinander
+  dieselbe, und hält Spuren mit laufender Halte-Kachel frei
+- `AudioDecoder` + `BeatAnalyzer` + `ChartGenerator.generate`: automatischer Modus
 - `GameActivity`: `MediaPlayer` + eigene Uhr (`System.nanoTime`), die laufend an die
   Player-Position angeglichen wird; `GameView` zeichnet mit `Canvas` jedes Frame

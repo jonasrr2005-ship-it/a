@@ -3,7 +3,6 @@ package de.rhythm.tiles
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
-import kotlin.math.log2
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -14,8 +13,7 @@ import kotlin.math.sqrt
  */
 object BeatAnalyzer {
 
-    /** [pitch]: Tonhöhe des lautesten Teiltons in Halbtönen (MIDI-Skala), 0 = unbekannt. */
-    class Onset(val time: Double, val strength: Float, val pitch: Float)
+    class Onset(val time: Double, val strength: Float)
 
     private const val FFT_SIZE = 512
     private const val HOP = 128
@@ -36,36 +34,16 @@ object BeatAnalyzer {
         var prev = FloatArray(bins)
         var cur = FloatArray(bins)
         val bandFlux = Array(bands.size) { FloatArray(frames) }
-        val rms = FloatArray(frames)
-        val pitch = FloatArray(frames)
-        val binHz = rate / FFT_SIZE
-        val minBin = (70 / binHz).toInt().coerceAtLeast(2)
-        val maxBin = (3000 / binHz).toInt().coerceAtMost(bins - 2)
 
         for (f in 0 until frames) {
             val off = f * HOP
-            var energy = 0f
             for (i in 0 until FFT_SIZE) {
-                energy += x[off + i] * x[off + i]
                 re[i] = x[off + i] * window[i]
                 im[i] = 0f
             }
-            rms[f] = sqrt(energy / FFT_SIZE)
             fft(re, im)
-            var peakBin = -1
-            var peakMag = 0f
             for (b in 1 until bins) {
-                val mag = sqrt(re[b] * re[b] + im[b] * im[b])
-                cur[b] = ln(1f + 100f * mag)
-                if (b in minBin..maxBin && mag > peakMag) { peakMag = mag; peakBin = b }
-            }
-            if (peakBin > 0) {
-                // Parabolische Interpolation für genauere Frequenz zwischen zwei FFT-Bins
-                val a = cur[peakBin - 1]; val b0 = cur[peakBin]; val c = cur[peakBin + 1]
-                val denom = a - 2 * b0 + c
-                val shift = if (denom != 0f) (0.5f * (a - c) / denom).coerceIn(-0.5f, 0.5f) else 0f
-                val hz = (peakBin + shift) * binHz
-                pitch[f] = (69 + 12 * log2(hz / 440.0)).toFloat()
+                cur[b] = ln(1f + 100f * sqrt(re[b] * re[b] + im[b] * im[b]))
             }
             if (f > 0) {
                 for ((k, band) in bands.withIndex()) {
@@ -88,12 +66,6 @@ object BeatAnalyzer {
             for (i in flux.indices) flux[i] += (bf[i] / norm).coerceAtMost(1.5f) / bandFlux.size
         }
 
-        // Lautstärke-Schwelle: Stellen, an denen die (getrennte) Spur praktisch stumm ist,
-        // erzeugen keine Kacheln – sonst würde Rauschen oder Übersprechen zu Noten
-        val sortedRms = rms.copyOf().also { it.sort() }
-        val loudRms = sortedRms[(sortedRms.size * 0.95).toInt().coerceAtMost(sortedRms.size - 1)]
-        val gate = maxOf(0.003f, loudRms * 0.06f)
-
         // Adaptive Schwelle: gleitender Mittelwert über ±0,2 s
         val half = (0.2 * rate / HOP).toInt().coerceAtLeast(2)
         val prefix = DoubleArray(frames + 1)
@@ -112,10 +84,8 @@ object BeatAnalyzer {
                 if (flux[j] > v || (flux[j] == v && j < i)) { isPeak = false; break }
             }
             if (!isPeak) continue
-            val after = minOf(frames - 1, i + 2)
-            if (maxOf(rms[i], rms[after]) < gate) continue
             val time = (i * HOP + FFT_SIZE / 2) / rate
-            onsets.add(Onset(time, (v - mean.toFloat()).coerceAtLeast(0f), pitch[after]))
+            onsets.add(Onset(time, (v - mean.toFloat()).coerceAtLeast(0f)))
         }
         return onsets
     }

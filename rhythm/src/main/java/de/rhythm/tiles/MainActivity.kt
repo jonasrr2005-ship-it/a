@@ -6,29 +6,25 @@ import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import de.rhythm.tiles.databinding.ActivityMainBinding
 import de.rhythm.tiles.databinding.ItemSongBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val chipIds = HashMap<Int, Instrument>()
-
-    private val prefs by lazy { getPreferences(MODE_PRIVATE) }
+    private var busy = false
 
     private val pickSong = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) startSong(uri)
@@ -44,59 +40,30 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        val savedDifficulty = Difficulty.entries.getOrNull(prefs.getInt("difficulty", 1)) ?: Difficulty.NORMAL
-        binding.difficultyGroup.check(buttonFor(savedDifficulty))
+        val prefs = getPreferences(MODE_PRIVATE)
+        val saved = Difficulty.entries.getOrNull(prefs.getInt("difficulty", 1)) ?: Difficulty.NORMAL
+        binding.difficultyGroup.check(buttonFor(saved))
         binding.difficultyGroup.addOnButtonCheckedListener { _, _, isChecked ->
             if (isChecked) prefs.edit().putInt("difficulty", selectedDifficulty().ordinal).apply()
             refreshRecent()
         }
 
-        val savedInstrument = runCatching { Instrument.valueOf(prefs.getString("instrument", null)!!) }
-            .getOrDefault(Instrument.ALL)
-        for (inst in Instrument.entries) {
-            val chip = layoutInflater.inflate(R.layout.item_instrument_chip, binding.instrumentGroup, false) as Chip
-            chip.id = View.generateViewId()
-            chip.text = inst.label
-            chipIds[chip.id] = inst
-            binding.instrumentGroup.addView(chip)
-            if (inst == savedInstrument) chip.isChecked = true
-        }
-        binding.instrumentGroup.setOnCheckedStateChangeListener { _, _ ->
-            prefs.edit().putString("instrument", selectedInstrument().name).apply()
-            updateInstrumentUi()
+        binding.modeGroup.check(if (prefs.getBoolean("tap_mode", true)) R.id.btn_mode_tap else R.id.btn_mode_auto)
+        updateModeHint()
+        binding.modeGroup.addOnButtonCheckedListener { _, _, isChecked ->
+            if (isChecked) prefs.edit().putBoolean("tap_mode", tapMode()).apply()
+            updateModeHint()
             refreshRecent()
         }
 
-        binding.isolateSwitch.isChecked = prefs.getBoolean("isolate", true)
-        binding.isolateSwitch.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean("isolate", checked).apply()
-        }
-
-        binding.modelStatus.setOnLongClickListener {
-            if (!StemSeparator.isModelInstalled(this) || SongPreparer.busy) return@setOnLongClickListener false
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.model_delete_title)
-                .setMessage(R.string.model_delete_text)
-                .setPositiveButton(R.string.delete) { _, _ ->
-                    StemSeparator.deleteModel(this)
-                    updateInstrumentUi()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-            true
+        // Reste der früheren KI-Version (Modell über 100 MB, getrennte Spuren) vom Gerät löschen
+        lifecycleScope.launch(Dispatchers.IO) {
+            File(filesDir, "models").deleteRecursively()
+            File(filesDir, "stems").deleteRecursively()
         }
 
         binding.pickButton.setOnClickListener {
             pickSong.launch(arrayOf("audio/*", "application/ogg"))
-        }
-        binding.cancelButton.setOnClickListener { SongPreparer.cancel() }
-
-        updateInstrumentUi()
-
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                SongPreparer.status.collect { render(it) }
-            }
         }
 
         handleIncoming(intent)
@@ -142,115 +109,96 @@ class MainActivity : AppCompatActivity() {
         else -> Difficulty.NORMAL
     }
 
-    private fun selectedInstrument() = chipIds[binding.instrumentGroup.checkedChipId] ?: Instrument.ALL
+    private fun tapMode() = binding.modeGroup.checkedButtonId == R.id.btn_mode_tap
 
-    private fun updateInstrumentUi() {
-        val inst = selectedInstrument()
-        binding.isolateSwitch.isVisible = inst.needsAi
-        binding.modelStatus.text = when {
-            !inst.needsAi -> getString(R.string.model_rhythm)
-            StemSeparator.isModelInstalled(this) ->
-                getString(R.string.model_installed, (StemSeparator.modelFile(this).length() / 1_000_000).toInt())
-            else -> getString(R.string.model_missing)
-        }
+    private fun updateModeHint() {
+        binding.modeHint.setText(if (tapMode()) R.string.mode_tap_hint else R.string.mode_auto_hint)
     }
 
     private fun startSong(uri: Uri) {
-        if (SongPreparer.busy) return
+        if (busy) return
+        val difficulty = selectedDifficulty()
         runCatching {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val instrument = selectedInstrument()
-        val request = SongPreparer.Request(
-            uri = uri,
-            title = displayName(this, uri),
-            songKey = ChartStore.songKey(this, uri),
-            instrument = instrument,
-            difficulty = selectedDifficulty(),
-            isolate = instrument.needsAi && binding.isolateSwitch.isChecked,
-        )
+        val title = displayName(this, uri)
+        val key = ChartStore.songKey(this, uri)
 
-        val (ready, audio) = SongPreparer.readyFile(this, request)
-        when {
-            ready -> launchGame(request, audio)
-            instrument.needsAi && !StemSeparator.isModelInstalled(this) -> {
+        if (tapMode()) {
+            Scores.addRecent(this, uri, title)
+            val taps = TapStore.load(this, key)
+            if (taps == null) {
+                startScreen(RecordActivity::class.java, uri, key, title, difficulty, tapped = true)
+            } else {
                 MaterialAlertDialogBuilder(this)
-                    .setTitle(R.string.model_download_title)
-                    .setMessage(getString(R.string.model_download_text, instrument.label))
-                    .setPositiveButton(R.string.download) { _, _ -> SongPreparer.start(this, request) }
-                    .setNegativeButton(R.string.cancel, null)
+                    .setTitle(R.string.tap_exists_title)
+                    .setMessage(getString(R.string.tap_exists_text, title, taps.size))
+                    .setPositiveButton(R.string.play) { _, _ ->
+                        startScreen(GameActivity::class.java, uri, key, title, difficulty, tapped = true)
+                    }
+                    .setNeutralButton(R.string.record_again) { _, _ ->
+                        startScreen(RecordActivity::class.java, uri, key, title, difficulty, tapped = true)
+                    }
                     .show()
             }
-            else -> SongPreparer.start(this, request)
-        }
-    }
-
-    private fun render(status: SongPreparer.Status?) {
-        val working = status is SongPreparer.Status.Working
-        binding.progressGroup.isVisible = working
-        binding.pickButton.isEnabled = !working
-        binding.instrumentGroup.isEnabled = !working
-        for (i in 0 until binding.instrumentGroup.childCount) binding.instrumentGroup.getChildAt(i).isEnabled = !working
-        binding.difficultyGroup.isEnabled = !working
-        binding.isolateSwitch.isEnabled = !working
-        if (working) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            return
         }
 
-        when (status) {
-            null -> {}
-            is SongPreparer.Status.Working -> {
-                binding.status.text = status.text
-                val p = status.progress
-                if (p == null) {
-                    if (!binding.progress.isIndeterminate) {
-                        binding.progress.isVisible = false
-                        binding.progress.isIndeterminate = true
-                        binding.progress.isVisible = true
+        if (ChartStore.load(this, key, difficulty) != null) {
+            Scores.addRecent(this, uri, title)
+            startScreen(GameActivity::class.java, uri, key, title, difficulty, tapped = false)
+            return
+        }
+
+        busy = true
+        binding.progressGroup.isVisible = true
+        binding.pickButton.isEnabled = false
+        binding.progress.progress = 0
+        binding.status.text = getString(R.string.analyzing, title)
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val pcm = AudioDecoder.decodeMono(this@MainActivity, uri) { p ->
+                        binding.progress.post { binding.progress.progress = (p * 90).toInt() }
                     }
-                } else {
-                    if (binding.progress.isIndeterminate) {
-                        binding.progress.isVisible = false
-                        binding.progress.isIndeterminate = false
-                        binding.progress.isVisible = true
+                    val onsets = BeatAnalyzer.detectOnsets(pcm)
+                    val seed = key.hashCode().toLong()
+                    // Gleich alle Schwierigkeitsgrade erzeugen, die Analyse ist der teure Teil
+                    for (d in Difficulty.entries) {
+                        ChartStore.save(this@MainActivity, key, d, ChartGenerator.generate(onsets, d, seed))
                     }
-                    binding.progress.progress = (p * 1000).toInt()
+                    ChartStore.load(this@MainActivity, key, difficulty)!!.size
                 }
             }
-            is SongPreparer.Status.Ready -> {
-                SongPreparer.consume()
-                updateInstrumentUi()
-                launchGame(status.request, status.audioFile)
-            }
-            is SongPreparer.Status.TooFewNotes -> {
-                SongPreparer.consume()
-                updateInstrumentUi()
-                val text = if (status.request.instrument.needsAi) {
-                    getString(R.string.too_few_notes, status.request.instrument.label)
-                } else getString(R.string.too_few_beats)
-                Toast.makeText(this, text, Toast.LENGTH_LONG).show()
-            }
-            is SongPreparer.Status.Failed -> {
-                SongPreparer.consume()
-                updateInstrumentUi()
-                Toast.makeText(this, getString(R.string.error_analyze, status.message), Toast.LENGTH_LONG).show()
+            busy = false
+            binding.progressGroup.isVisible = false
+            binding.pickButton.isEnabled = true
+            result.onSuccess { count ->
+                if (count < 5) {
+                    Toast.makeText(this@MainActivity, R.string.too_few_beats, Toast.LENGTH_LONG).show()
+                } else {
+                    Scores.addRecent(this@MainActivity, uri, title)
+                    startScreen(GameActivity::class.java, uri, key, title, difficulty, tapped = false)
+                }
+            }.onFailure {
+                Toast.makeText(this@MainActivity, getString(R.string.error_analyze, it.message), Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    private fun launchGame(r: SongPreparer.Request, audioFile: File?) {
-        Scores.addRecent(this, r.uri, r.title)
+    /** Startet das Spiel oder das Eintippen ([RecordActivity]) für einen Song. */
+    private fun startScreen(
+        activity: Class<*>, uri: Uri, key: String, title: String, difficulty: Difficulty, tapped: Boolean,
+    ) {
         startActivity(
-            Intent(this, GameActivity::class.java)
-                .setData(r.uri)
+            Intent(this, activity)
+                .setData(uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                .putExtra(GameActivity.EXTRA_SONG_KEY, r.songKey)
-                .putExtra(GameActivity.EXTRA_TITLE, r.title)
-                .putExtra(GameActivity.EXTRA_DIFFICULTY, r.difficulty.name)
-                .putExtra(GameActivity.EXTRA_INSTRUMENT, r.instrument.name)
-                .putExtra(GameActivity.EXTRA_AUDIO_FILE, audioFile?.path)
+                .putExtra(GameActivity.EXTRA_SONG_KEY, key)
+                .putExtra(GameActivity.EXTRA_TITLE, title)
+                .putExtra(GameActivity.EXTRA_DIFFICULTY, difficulty.name)
+                .putExtra(GameActivity.EXTRA_TAPPED, tapped)
         )
     }
 
@@ -260,15 +208,15 @@ class MainActivity : AppCompatActivity() {
         val recent = Scores.recent(this)
         binding.recentHeader.isVisible = recent.isNotEmpty()
         val difficulty = selectedDifficulty()
-        val instrument = selectedInstrument()
+        val tapped = tapMode()
         for (song in recent) {
             val item = ItemSongBinding.inflate(LayoutInflater.from(this), container, false)
             item.songTitle.text = song.title
             val key = ChartStore.songKey(this, song.uri)
-            val best = Scores.best(this, key, instrument, difficulty)
-            item.songBest.text = if (best > 0) {
-                getString(R.string.best_score, best, instrument.label)
-            } else getString(R.string.not_played)
+            val best = Scores.best(this, key, tapped, difficulty)
+            val bestText = if (best > 0) getString(R.string.best_score, best) else getString(R.string.not_played)
+            val tapCount = if (tapped) TapStore.load(this, key)?.size else null
+            item.songBest.text = if (tapCount != null) "${getString(R.string.tapped_info, tapCount)} · $bestText" else bestText
             item.root.setOnClickListener {
                 val readable = runCatching {
                     contentResolver.openInputStream(song.uri)?.close() != null

@@ -42,9 +42,9 @@ class ResultActivity : AppCompatActivity() {
             else -> "D" to 0
         }
 
-        val instrument = Instrument.valueOf(intent.getStringExtra(GameActivity.EXTRA_INSTRUMENT) ?: Instrument.ALL.name)
+        val mode = getString(if (intent.getBooleanExtra(GameActivity.EXTRA_TAPPED, false)) R.string.mode_tap else R.string.mode_auto)
         binding.songTitle.text = getString(
-            R.string.result_title, intent.getStringExtra(GameActivity.EXTRA_TITLE), instrument.label, difficulty.label,
+            R.string.result_title, intent.getStringExtra(GameActivity.EXTRA_TITLE), mode, difficulty.label,
         )
         binding.grade.text = grade
         binding.stars.text = "★".repeat(stars) + "☆".repeat(3 - stars)
